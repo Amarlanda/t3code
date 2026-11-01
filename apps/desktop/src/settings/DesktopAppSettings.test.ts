@@ -196,7 +196,7 @@ describe("DesktopSettings", () => {
       Effect.gen(function* () {
         const settings = yield* DesktopAppSettings.DesktopAppSettings;
         yield* writeSettingsPatch({
-          mainWindowBounds: { x: 10.5, y: 20, width: 839, height: 620 },
+          mainWindowBounds: { x: 10.5, y: 20, width: 479, height: 400 },
           mainWindowMaximized: true,
           serverExposureMode: "network-accessible",
         });

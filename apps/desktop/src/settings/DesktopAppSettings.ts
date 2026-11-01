@@ -47,9 +47,11 @@ export interface DesktopSettingsChange {
 }
 
 const DEFAULT_TAILSCALE_SERVE_PORT = 443;
-const MIN_MAIN_WINDOW_SIZE = {
-  width: 840,
-  height: 620,
+// Tiling window managers shrink tiles below any min-size hint, so keep this small enough
+// for narrow tiles; the web UI switches to its compact layout below md.
+export const MIN_MAIN_WINDOW_SIZE = {
+  width: 480,
+  height: 400,
 } as const;
 export const DesktopWindowBoundsSchema = Schema.Struct({
   x: Schema.Int,
