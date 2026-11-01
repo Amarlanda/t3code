@@ -39,6 +39,7 @@ import {
   validateAttachmentUploadToken,
 } from "./assets/AttachmentUpload.ts";
 import * as BrowserTraceCollector from "./observability/BrowserTraceCollector.ts";
+import * as UiActivityJournal from "./observability/UiActivityJournal.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import { traceRelayRequest } from "./cloud/traceRelayRequest.ts";
 import {
@@ -56,6 +57,11 @@ import {
 } from "./httpCors.ts";
 
 const OTLP_TRACES_PROXY_PATH = "/api/observability/v1/traces";
+const UI_ACTIVITY_PATH = "/api/observability/ui-activity";
+const UI_ACTIVITY_MAX_EVENTS_PER_REQUEST = 2000;
+const decodeUiActivityEvents = Schema.decodeUnknownEffect(
+  Schema.Array(Schema.Record(Schema.String, Schema.Unknown)),
+);
 const LOOPBACK_HOSTNAMES = new Set(["127.0.0.1", "::1", "localhost"]);
 const SVG_CONTENT_SECURITY_POLICY = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
 // Opaque origin blocks cookies, storage and API access while allowing scripts.
@@ -385,7 +391,31 @@ export const layerOtlpTracesProxyRoute = HttpRouter.add(
   ),
 );
 
-const UNTRACED_REQUEST_PATHS: ReadonlySet<string> = new Set([OTLP_TRACES_PROXY_PATH]);
+export const layerUiActivityRoute = HttpRouter.add(
+  "POST",
+  UI_ACTIVITY_PATH,
+  Effect.gen(function* () {
+    yield* authenticateRawRouteWithScope(AuthOrchestrationOperateScope);
+    const request = yield* HttpServerRequest.HttpServerRequest;
+    const journal = yield* UiActivityJournal.UiActivityJournal;
+    const events = yield* decodeUiActivityEvents(yield* request.json);
+    yield* journal.append(events.slice(0, UI_ACTIVITY_MAX_EVENTS_PER_REQUEST));
+    return HttpServerResponse.empty({ status: 204 });
+  }).pipe(
+    Effect.catchTags({
+      EnvironmentAuthInvalidError: HttpServerRespondable.toResponse,
+      EnvironmentInternalError: HttpServerRespondable.toResponse,
+      EnvironmentScopeRequiredError: HttpServerRespondable.toResponse,
+    }),
+    Effect.orElseSucceed(() => HttpServerResponse.text("Invalid UI activity.", { status: 400 })),
+    Effect.withTracerEnabled(false),
+  ),
+);
+
+const UNTRACED_REQUEST_PATHS: ReadonlySet<string> = new Set([
+  OTLP_TRACES_PROXY_PATH,
+  UI_ACTIVITY_PATH,
+]);
 
 // HttpRouter.serve builds routes privately; provide the server-wide TracerDisabledWhen to the served layer.
 const layerUntracedRequests = Layer.succeed(HttpMiddleware.TracerDisabledWhen)((request) => {
