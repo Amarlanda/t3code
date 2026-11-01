@@ -9,7 +9,13 @@ import {
 } from "react";
 import { useLocation, useRouter, type AnyRouter } from "@tanstack/react-router";
 
-import { moveWorkspaceFocus, workspaceAreaProps } from "../lib/workspaceFocus";
+import { focusSidebarSearch } from "../lib/sidebarTree";
+import { VimModeBar } from "./VimModeBar";
+import {
+  moveWorkspaceFocus,
+  requestWorkspaceContentFocus,
+  workspaceAreaProps,
+} from "../lib/workspaceFocus";
 import { isCommandPaletteOpen } from "../commandPaletteBus";
 import { isElectron } from "../env";
 import {
@@ -316,7 +322,7 @@ function SidebarControl() {
   const router = useRouter();
   const usagePageOpen = useLocation({ select: (location) => location.pathname === "/usage" });
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
-  const { toggleSidebar, isMobile, mobileSheetMounted } = useSidebar();
+  const { toggleSidebar, isMobile, mobileSheetMounted, open } = useSidebar();
   const isSidebarVisible = useSidebarVisibility();
   const environmentIdentificationMode = useEnvironmentIdentificationMode();
   const stageBackdropVariant = useSidebarStageBackdropVariant(environmentIdentificationMode);
@@ -351,7 +357,15 @@ function SidebarControl() {
 
       event.preventDefault();
       event.stopPropagation();
-      toggleSidebar();
+      const focusInSidebar = document.activeElement?.closest('[data-slot="sidebar"]') != null;
+      if (isMobile || (open && focusInSidebar)) {
+        toggleSidebar();
+        if (!isMobile) requestWorkspaceContentFocus();
+        return;
+      }
+      if (!open) toggleSidebar();
+      // The search box mounts and leaves inert only after the open state commits.
+      window.setTimeout(focusSidebarSearch, 0);
     };
 
     window.addEventListener("keydown", onKeyDown, true);
@@ -362,7 +376,7 @@ function SidebarControl() {
       window.removeEventListener("keydown", onKeyDown, true);
       unsubscribe?.();
     };
-  }, [keybindings, toggleSidebar, usagePageOpen]);
+  }, [isMobile, keybindings, open, toggleSidebar, usagePageOpen]);
 
   // The control lives as long as the shell, so it carries the shell's commands. Created
   // once so re-renders never re-register them.
@@ -475,6 +489,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
         {children}
         <BackgroundThreadAnnouncer />
         <SidebarControl />
+        <VimModeBar />
         {isElectron ? <HistorySwipeNavigation /> : null}
       </SidebarProvider>
     </PanelAnimationSuppressionProvider>

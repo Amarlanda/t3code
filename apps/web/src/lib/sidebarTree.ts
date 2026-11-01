@@ -1,6 +1,35 @@
+import { requestWorkspaceContentFocus } from "./workspaceFocus";
+
 const ROW = "[data-sidebar-row]";
 const CONTROL = 'button, a[href], input, textarea, select, [contenteditable="true"], [tabindex]';
 const TEXT_ENTRY = 'input, textarea, select, [contenteditable="true"]';
+const VIM_ROW_KEYS: Readonly<Record<string, string>> = {
+  j: "ArrowDown",
+  k: "ArrowUp",
+  h: "ArrowLeft",
+};
+const SIDEBAR_SEARCH = 'input[aria-label="Search threads"]';
+
+/** Focuses the thread search box so typing finds a thread. */
+export function focusSidebarSearch(): boolean {
+  const input = document.querySelector<HTMLInputElement>(SIDEBAR_SEARCH);
+  if (!input) return false;
+  input.focus();
+  input.select();
+  return true;
+}
+
+/** Focuses the current, or first, thread row. */
+export function focusSidebarRow(): boolean {
+  const tree = document.querySelector<HTMLElement>('[role="tree"][aria-label="Threads"]');
+  const row =
+    tree?.querySelector<HTMLElement>(`${ROW}[tabindex="0"]`) ??
+    tree?.querySelector<HTMLElement>(ROW);
+  if (!row) return false;
+  row.scrollIntoView({ block: "nearest" });
+  row.focus({ preventScroll: true });
+  return true;
+}
 
 function setAttribute(element: Element, name: string, value: string) {
   if (element.getAttribute(name) !== value) element.setAttribute(name, value);
@@ -165,7 +194,19 @@ export function installSidebarTree(root: HTMLElement) {
     const index = rows.indexOf(row);
     if (index < 0) return;
     let target: HTMLElement | undefined;
-    switch (event.key) {
+    if (event.key === "l") {
+      event.preventDefault();
+      event.stopPropagation();
+      requestWorkspaceContentFocus();
+      return;
+    }
+    if (event.key === "/") {
+      event.preventDefault();
+      event.stopPropagation();
+      focusSidebarSearch();
+      return;
+    }
+    switch (VIM_ROW_KEYS[event.key] ?? event.key) {
       case "ArrowDown":
         target = rows[Math.min(index + 1, rows.length - 1)];
         break;

@@ -1,4 +1,4 @@
-import { attachSidebarTree, SIDEBAR_TREE_PROPS } from "../lib/sidebarTree";
+import { attachSidebarTree, focusSidebarRow, SIDEBAR_TREE_PROPS } from "../lib/sidebarTree";
 import { type EnvironmentId, type ScopedProjectRef } from "@t3tools/contracts";
 import type { EnvironmentServerConfig } from "@t3tools/client-runtime/connection";
 import { ThreadContextDragGhost } from "./chat/ThreadContextDragGhost";
@@ -1444,6 +1444,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       event.preventDefault();
       event.stopPropagation();
       clearThreadSearch();
+      return;
+    }
+    if (event.key === "Escape" || (event.key === "ArrowDown" && threadSearchResults.length === 0)) {
+      if (focusSidebarRow()) event.preventDefault();
       return;
     }
     if (threadSearchResults.length === 0) return;

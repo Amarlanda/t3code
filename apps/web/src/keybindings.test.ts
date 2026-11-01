@@ -644,6 +644,25 @@ describe("resolveShortcutCommand", () => {
     );
   });
 
+  it("treats Super like Ctrl for mod shortcuts off macOS", () => {
+    const options = { platform: "Linux" };
+    assert.strictEqual(
+      resolveShortcutCommand(event({ key: "b", metaKey: true }), DEFAULT_BINDINGS, options),
+      "sidebar.toggle",
+    );
+    assert.strictEqual(
+      resolveShortcutCommand(event({ key: "b", ctrlKey: true }), DEFAULT_BINDINGS, options),
+      "sidebar.toggle",
+    );
+    assert.isNull(
+      resolveShortcutCommand(
+        event({ key: "b", metaKey: true, ctrlKey: true }),
+        DEFAULT_BINDINGS,
+        options,
+      ),
+    );
+  });
+
   it("navigates history with mod+[ and mod+] outside the terminal", () => {
     const back = event({ key: "[", code: "BracketLeft", metaKey: true });
     const forward = event({ key: "]", code: "BracketRight", ctrlKey: true });

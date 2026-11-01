@@ -111,6 +111,14 @@ export function matchesKeybindingShortcutModifiers(
   platform: string,
 ): boolean {
   const useMetaForMod = isMacPlatform(platform);
+  // Off macOS, Super (Meta) also counts as `mod`, so Super+B works wherever Ctrl+B does.
+  if (!useMetaForMod && shortcut.modKey && !shortcut.metaKey && !shortcut.ctrlKey) {
+    return (
+      event.metaKey !== event.ctrlKey &&
+      event.shiftKey === shortcut.shiftKey &&
+      event.altKey === shortcut.altKey
+    );
+  }
   const expectedMeta = shortcut.metaKey || (shortcut.modKey && useMetaForMod);
   const expectedCtrl = shortcut.ctrlKey || (shortcut.modKey && !useMetaForMod);
   return (
