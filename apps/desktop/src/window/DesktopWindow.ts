@@ -578,6 +578,13 @@ export const make = Effect.gen(function* () {
           { role: "copy", enabled: params.editFlags.canCopy },
           { role: "paste", enabled: params.editFlags.canPaste },
           { role: "selectAll", enabled: params.editFlags.canSelectAll },
+          { type: "separator" },
+          {
+            label: "Inspect Element",
+            click: () => {
+              if (!contents.isDestroyed()) contents.inspectElement(params.x, params.y);
+            },
+          },
         );
 
         void runPromise(
