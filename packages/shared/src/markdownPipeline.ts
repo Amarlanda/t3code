@@ -128,6 +128,25 @@ function rehypePreserveImageSourceMeta() {
   };
 }
 
+function rehypeRenderVoiceMarkers() {
+  return (tree: MarkdownImageHastNode) => {
+    const visit = (node: MarkdownImageHastNode) => {
+      if (node.type === "raw" && typeof node.value === "string") {
+        const marker =
+          /^\s*<!--\s*SPEAK(?:\s+high)?\s+\[([^\]\r\n]+)\]:\s*([\s\S]*?)\s*-->\s*$/.exec(
+            node.value,
+          );
+        if (marker && !marker[2]?.includes("-->")) {
+          node.type = "text";
+          node.value = `${marker[1]?.trim()}: ${marker[2]?.trim()}`;
+        }
+      }
+      node.children?.forEach(visit);
+    };
+    visit(tree);
+  };
+}
+
 const CHAT_MARKDOWN_SANITIZE_SCHEMA = {
   ...defaultSchema,
   attributes: {
@@ -187,6 +206,7 @@ export const CHAT_MARKDOWN_REMARK_PLUGINS_WITH_BREAKS: PluggableList = [
 
 export const CHAT_MARKDOWN_REHYPE_PLUGINS: PluggableList = [
   rehypePreserveBareAnchorPlaceholders,
+  rehypeRenderVoiceMarkers,
   rehypeRaw,
   rehypePreserveImageSourceMeta,
   [rehypeSanitize, CHAT_MARKDOWN_SANITIZE_SCHEMA],

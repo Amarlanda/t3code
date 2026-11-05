@@ -4,6 +4,31 @@ import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
 import { CHAT_MARKDOWN_REHYPE_PLUGINS, CHAT_MARKDOWN_REMARK_PLUGINS } from "./markdownPipeline.ts";
 
+it("shows voice-marker replies without exposing ordinary comments or interpreting their text as HTML", () => {
+  const processor = unified()
+    .use(remarkParse)
+    .use(CHAT_MARKDOWN_REMARK_PLUGINS)
+    .use(remarkRehype, { allowDangerousHtml: true })
+    .use(CHAT_MARKDOWN_REHYPE_PLUGINS);
+  type Node = { type: string; value?: string; children?: Node[] };
+  const text = (node: Node): string =>
+    node.type === "text" ? (node.value ?? "") : (node.children ?? []).map(text).join("");
+  const render = (markdown: string) => text(processor.runSync(processor.parse(markdown)) as Node);
+
+  expect(render("<!-- SPEAK [Hello there]: Hi Amar. -->")).toBe("Hello there: Hi Amar.");
+  expect(
+    render(
+      "```bash\n./run.sh setup\n./run.sh control\n```\n\n<!-- SPEAK high [Startup blocked]: Pair the headset first. -->",
+    ),
+  ).toContain("Startup blocked: Pair the headset first.");
+  expect(render("<!-- SPEAK [Markup example]: <script>alert(1)</script> -->")).toBe(
+    "Markup example: <script>alert(1)</script>",
+  );
+  expect(render("<!-- ordinary hidden comment -->")).toBe("");
+  expect(render("`<!-- SPEAK [Example]: literal -->`")).toBe("<!-- SPEAK [Example]: literal -->");
+  expect(render("<!-- SPEAK [Incomplete]: waiting")).toBe("");
+});
+
 it("preserves in-app thread links through the shared Markdown sanitizer", () => {
   const processor = unified()
     .use(remarkParse)
