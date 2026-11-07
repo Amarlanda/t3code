@@ -1,3 +1,4 @@
+import { usePinnedThreadColors } from "~/pinnedThreadColors";
 import { attachSidebarTree, SIDEBAR_TREE_PROPS } from "../lib/sidebarTree";
 import { type EnvironmentId, type ScopedProjectRef } from "@t3tools/contracts";
 import type { EnvironmentServerConfig } from "@t3tools/client-runtime/connection";
@@ -2637,6 +2638,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             return;
           case "unsnooze":
             attemptUnsnooze(threadRef);
+            return;
+          case "pin-color":
+            usePinnedThreadColors.getState().openPicker(threadRef);
             return;
           case "pin":
             attemptPin(threadRef);

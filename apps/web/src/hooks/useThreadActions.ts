@@ -24,6 +24,7 @@ import { useRouter } from "@tanstack/react-router";
 
 import { getFallbackThreadIdAfterDelete, pinOrderKeyBetween } from "../components/Sidebar.logic";
 import { useComposerDraftStore } from "../composerDraftStore";
+import { usePinnedThreadColors } from "../pinnedThreadColors";
 import { environmentSession, readEnvironmentScope } from "../state/session";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { environmentServerConfigsAtom } from "../state/server";
@@ -681,13 +682,15 @@ export function useThreadActions() {
     // Pinning clears snooze, so older Settled or Snoozed undos would fight this pin.
     ThreadUndo.invalidate("settle", scopedThreadKey(target));
     ThreadUndo.invalidate("snooze", scopedThreadKey(target));
-    return pinThreadMutation({
+    const result = await pinThreadMutation({
       environmentId: target.environmentId,
       input: {
         threadId: target.threadId,
         ...(orderKey !== undefined ? { orderKey } : {}),
       },
     });
+    if (result._tag === "Success") usePinnedThreadColors.getState().openPicker(target);
+    return result;
   };
 
   const unpinThread = async (target: ScopedThreadRef) => {

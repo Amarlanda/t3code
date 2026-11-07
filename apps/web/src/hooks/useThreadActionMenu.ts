@@ -1,3 +1,4 @@
+import { usePinnedThreadColors } from "~/pinnedThreadColors";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { requestCustomSnooze } from "../components/CustomSnoozeDialog";
 import { openGuestShareDialog } from "../components/chat/guestShareDialogState";
@@ -229,6 +230,9 @@ export function useThreadActionMenu(input: {
           return;
         case "unsnooze":
           await reportFailure("Failed to wake thread", () => unsnoozeThread(threadRef));
+          return;
+        case "pin-color":
+          usePinnedThreadColors.getState().openPicker(threadRef);
           return;
         case "pin":
           await reportFailure("Failed to pin thread", () => pinThread(threadRef));
