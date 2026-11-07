@@ -305,10 +305,16 @@ export const installUVoice = Effect.fn("desktop.ipc.installUVoice")(function* ()
   });
   const disconnect = () => {
     renderer?.removeListener("destroyed", disconnect);
-    renderer?.removeListener("did-start-loading", disconnect);
+    renderer?.removeListener("did-start-navigation", onNavigation);
+    renderer?.removeListener("render-process-gone", disconnect);
     renderer = undefined;
     for (const [requestId, resolve] of pending)
       resolve(failure(requestId, "T3 Code renderer disconnected; delivery is unconfirmed."));
+  };
+  const onNavigation = (
+    event: Electron.Event<Electron.WebContentsDidStartNavigationEventParams>,
+  ) => {
+    if (event.isMainFrame && !event.isSameDocument) disconnect();
   };
   yield* ipc.handle(
     DesktopIpc.makeIpcMethod({
@@ -326,7 +332,8 @@ export const installUVoice = Effect.fn("desktop.ipc.installUVoice")(function* ()
         disconnect();
         renderer = sender;
         sender.once("destroyed", disconnect);
-        sender.once("did-start-loading", disconnect);
+        sender.on("did-start-navigation", onNavigation);
+        sender.once("render-process-gone", disconnect);
       }),
     }),
   );
