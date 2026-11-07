@@ -2082,6 +2082,7 @@ export const OrchestrationV2ThreadShell = Schema.Struct({
   providerInstanceHistory: Schema.optional(Schema.Array(ProviderInstanceId)).pipe(
     Schema.withDecodingDefault(Effect.succeed([])),
   ),
+  nativeConversationIds: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
   goal: Schema.optional(Schema.NullOr(OrchestrationV2ProviderGoal)),
   itemCount: NonNegativeInt,
   visibleItemCount: NonNegativeInt,

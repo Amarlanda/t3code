@@ -1532,6 +1532,10 @@ export function threadShellFromProjection(
       threadId: projection.thread.id,
       providerThreads: projection.providerThreads,
     }),
+    nativeConversationIds: nativeConversationIdsForShell(
+      projection.thread.id,
+      projection.providerThreads,
+    ),
     goal: activeProviderGoalForShell(
       projection.providerThreads,
       projection.thread.activeProviderThreadId,
@@ -1556,6 +1560,22 @@ export function threadShellFromProjection(
     limitRecovery: projection.thread.limitRecovery ?? null,
     deletedAt: projection.thread.deletedAt,
   };
+}
+
+function nativeConversationIdsForShell(
+  threadId: ThreadId,
+  providerThreads: ReadonlyArray<OrchestrationV2ThreadProjection["providerThreads"][number]>,
+): ReadonlyArray<string> {
+  return [
+    ...new Set(
+      providerThreads
+        .filter((thread) => thread.appThreadId === threadId && thread.ownerNodeId === null)
+        .flatMap((thread) => {
+          const nativeId = thread.nativeThreadRef?.nativeId;
+          return nativeId && nativeId.trim() ? [nativeId] : [];
+        }),
+    ),
+  ].sort();
 }
 
 function providerInstanceHistoryForShell(input: {
@@ -1637,6 +1657,7 @@ type ShellThreadState = {
   readonly hasActionableProposedPlan: boolean;
   readonly pendingBackgroundTasks: OrchestrationV2ThreadShell["pendingBackgroundTasks"];
   readonly providerInstanceHistory: OrchestrationV2ThreadShell["providerInstanceHistory"];
+  readonly nativeConversationIds: ReadonlyArray<string>;
   readonly goal: OrchestrationV2ThreadShell["goal"];
   readonly itemCount: number;
   readonly runlessItemCount: number;
@@ -1801,6 +1822,7 @@ function shellFromState(input: {
     hasActionableProposedPlan: input.state.hasActionableProposedPlan,
     pendingBackgroundTasks: input.state.pendingBackgroundTasks,
     providerInstanceHistory: input.state.providerInstanceHistory,
+    nativeConversationIds: input.state.nativeConversationIds,
     goal: input.state.goal,
     itemCount: input.state.itemCount,
     visibleItemCount: input.visibleItemCount,
@@ -6484,6 +6506,10 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
             threadId: thread.id,
             providerThreads: providerThreadsByThreadId.get(thread.id) ?? [],
           }),
+          nativeConversationIds: nativeConversationIdsForShell(
+            thread.id,
+            providerThreadsByThreadId.get(thread.id) ?? [],
+          ),
           goal: activeProviderGoalForShell(
             providerThreadsByThreadId.get(thread.id) ?? [],
             thread.activeProviderThreadId,
