@@ -111,8 +111,7 @@ export function matchesKeybindingShortcutModifiers(
   platform: string,
 ): boolean {
   const useMetaForMod = isMacPlatform(platform);
-  // Off macOS, Super (Meta) also counts as `mod`, so Super+B works wherever Ctrl+B does.
-  if (!useMetaForMod && shortcut.modKey && !shortcut.metaKey && !shortcut.ctrlKey) {
+  if (shortcut.modKey && !shortcut.metaKey && !shortcut.ctrlKey) {
     return (
       event.metaKey !== event.ctrlKey &&
       event.shiftKey === shortcut.shiftKey &&
@@ -154,17 +153,13 @@ type WhenToken =
 
 export const DEFAULT_KEYBINDINGS: ReadonlyArray<KeybindingRule> = [
   { key: "mod+b", command: "sidebar.toggle" },
-  { key: "f6", command: "workspace.focusNext" },
-  { key: "shift+f6", command: "workspace.focusPrevious" },
-  // Some browsers keep plain F6 for their own toolbars; mod+F6 reaches the page in all of them.
-  { key: "mod+f6", command: "workspace.focusNext" },
-  { key: "mod+shift+f6", command: "workspace.focusPrevious" },
   { key: "mod+[", command: "navigation.back", when: "!terminalFocus" },
   { key: "mod+]", command: "navigation.forward", when: "!terminalFocus" },
-  { key: "mod+j", command: "terminal.toggle" },
+  { key: "mod+t", command: "terminal.toggle" },
+  { key: "mod+j", command: "terminal.cycleLayout" },
   { key: "mod+alt+b", command: "rightPanel.toggle" },
   { key: "mod+shift+b", command: "threadPanel.toggle", when: "!terminalFocus" },
-  { key: "mod+t", command: "rightPanel.new", when: "rightPanelOpen && !terminalFocus" },
+  { key: "mod+alt+t", command: "rightPanel.new", when: "rightPanelOpen && !terminalFocus" },
   { key: "mod+d", command: "terminal.split", when: "terminalFocus" },
   { key: "mod+shift+d", command: "terminal.splitVertical", when: "terminalFocus" },
   { key: "mod+n", command: "terminal.new", when: "terminalFocus" },

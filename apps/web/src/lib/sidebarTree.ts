@@ -1,4 +1,4 @@
-import { requestWorkspaceContentFocus } from "./workspaceFocus";
+import { requestWorkspaceFocus } from "./workspaceFocus";
 
 const ROW = "[data-sidebar-row]";
 const CONTROL = 'button, a[href], input, textarea, select, [contenteditable="true"], [tabindex]';
@@ -42,12 +42,12 @@ function setTabIndex(element: HTMLElement, value: number) {
 export const SIDEBAR_TREE_PROPS = { role: "tree", "aria-label": "Threads" } as const;
 
 /** Ref callback for a sidebar list; installs the tree and returns its cleanup. */
-export function attachSidebarTree(element: HTMLElement | null) {
-  return element ? installSidebarTree(element) : undefined;
+export function attachSidebarTree(element: HTMLElement | null, onExit?: () => void) {
+  return element ? installSidebarTree(element, onExit) : undefined;
 }
 
 /** A roving DOM focus, separate from thread activation, as in VS Code's list commands. */
-export function installSidebarTree(root: HTMLElement) {
+export function installSidebarTree(root: HTMLElement, onExit?: () => void) {
   let rows: HTMLElement[] = [];
   let focusedId: string | undefined;
   let ownsFocus = false;
@@ -169,10 +169,11 @@ export function installSidebarTree(root: HTMLElement) {
     if (
       !event.defaultPrevented &&
       !event.isComposing &&
+      event.keyCode !== 229 &&
       !event.altKey &&
       !event.ctrlKey &&
       !event.metaKey &&
-      (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) &&
+      (event.key === "ContextMenu" || (!event.shiftKey && event.key === "m")) &&
       row instanceof HTMLElement &&
       row.matches(ROW)
     ) {
@@ -184,6 +185,7 @@ export function installSidebarTree(root: HTMLElement) {
     if (
       event.defaultPrevented ||
       event.isComposing ||
+      event.keyCode === 229 ||
       event.altKey ||
       event.ctrlKey ||
       event.metaKey ||
@@ -194,10 +196,11 @@ export function installSidebarTree(root: HTMLElement) {
     const index = rows.indexOf(row);
     if (index < 0) return;
     let target: HTMLElement | undefined;
-    if (event.key === "l") {
+    if (event.key === "l" || event.key === "ArrowRight") {
       event.preventDefault();
       event.stopPropagation();
-      requestWorkspaceContentFocus();
+      onExit?.();
+      requestWorkspaceFocus({ area: "conversation", restore: false });
       return;
     }
     if (event.key === "/") {
@@ -219,13 +222,6 @@ export function installSidebarTree(root: HTMLElement) {
       case "End":
         target = rows.at(-1);
         break;
-      case "ArrowRight":
-        if (row.getAttribute("aria-expanded") === "false") row.click();
-        else
-          target = rows.find(
-            (candidate) => candidate.dataset.sidebarParent === row.dataset.sidebarRow,
-          );
-        break;
       case "ArrowLeft":
         if (row.getAttribute("aria-expanded") === "true") row.click();
         else
@@ -233,7 +229,7 @@ export function installSidebarTree(root: HTMLElement) {
             (candidate) => candidate.dataset.sidebarRow === row.dataset.sidebarParent,
           );
         break;
-      // Row handlers own Enter, Space, F2 rename, and the context menu.
+      // Row handlers own Enter, Space, and rename.
       default:
         return;
     }
@@ -242,7 +238,7 @@ export function installSidebarTree(root: HTMLElement) {
     if (target) focusRow(target);
   };
   const onKeyUp = (event: KeyboardEvent) => {
-    if (!contextMenuRow || (event.key !== "ContextMenu" && event.key !== "F10")) return;
+    if (!contextMenuRow || (event.key !== "ContextMenu" && event.key !== "m")) return;
     const row = contextMenuRow;
     contextMenuRow = undefined;
     event.preventDefault();

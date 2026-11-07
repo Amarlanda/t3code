@@ -6,7 +6,7 @@ import {
   type EnvironmentId,
   type ResolvedKeybindingsConfig,
 } from "@t3tools/contracts";
-import { memo, use, useRef } from "react";
+import { Fragment, memo, use, useRef } from "react";
 import { BackgroundThreadContext } from "./backgroundThread";
 import { shortcutLabelForCommand } from "../../keybindings";
 import { OPEN_FAVORITE_EDITOR_ATTRIBUTE } from "./OpenInPickerShortcut";
@@ -19,7 +19,12 @@ import {
   useRemoteOpenState,
 } from "../../remoteOpen";
 import { useEnvironment } from "../../state/environments";
-import { ChevronDownIcon, FolderClosedIcon, SquareArrowOutUpRightIcon } from "lucide-react";
+import {
+  ChevronDownIcon,
+  FolderClosedIcon,
+  GitBranchIcon,
+  SquareArrowOutUpRightIcon,
+} from "lucide-react";
 
 import { Group, GroupSeparator } from "../ui/group";
 import {
@@ -184,6 +189,11 @@ const resolveOpenInOptions = (platform: string, availableEditors: ReadonlyArray<
       kind: "brand",
     },
     {
+      Icon: GitBranchIcon,
+      value: "gitgrove",
+      kind: "generic",
+    },
+    {
       Icon: isMacPlatform(platform)
         ? FinderIcon
         : isWindowsPlatform(platform)
@@ -228,6 +238,7 @@ export const OpenInPicker = memo(function OpenInPicker({
 }) {
   const isPanel = displayMode === "panel";
   const ActionGroup = isPanel ? "div" : Group;
+  const PickerRow = isPanel ? "div" : Fragment;
   const panelAnchorRef = useRef<HTMLDivElement | null>(null);
   const openInEditorMutation = useAtomCommand(shellEnvironment.openInEditor, "open in editor");
   const remote = useRemoteOpenState(environmentId);
@@ -285,6 +296,17 @@ export const OpenInPicker = memo(function OpenInPicker({
   const options = resolveOpenInOptions(navigator.platform, effectiveEditors);
   const primaryOption = options.find(({ value }) => value === preferredEditor) ?? null;
   const primaryLabel = isPanel ? `Open in ${primaryOption?.label ?? "editor"}` : "Open";
+  const quickOptions = isPanel
+    ? options.filter(({ value }) => value === "vscode" || value === "gitgrove")
+    : [];
+  const preferredHasQuickButton = quickOptions.some(({ value }) => value === preferredEditor);
+
+  const openAndAnnounce = (editor: EditorId) => {
+    const label = editorLabelForPlatform(editor, navigator.platform);
+    void openInEditor(editor).then((opened) => {
+      if (opened) announce(`Opened in ${label}`);
+    });
+  };
 
   const editorItems = (
     <>
@@ -360,82 +382,146 @@ export const OpenInPicker = memo(function OpenInPicker({
     <ActionGroup
       aria-label="Open in editor"
       role="group"
-      {...(isPanel
-        ? { className: THREAD_DETAILS_PANEL_SPLIT_GROUP_CLASS, ref: panelAnchorRef }
-        : {})}
+      data-thread-launcher-group={isPanel ? "" : undefined}
+      ref={isPanel ? panelAnchorRef : undefined}
+      {...(isPanel ? { className: "flex w-full flex-col" } : {})}
+      onKeyDown={
+        isPanel
+          ? (event) => {
+              if (
+                event.defaultPrevented ||
+                event.nativeEvent.isComposing ||
+                event.ctrlKey ||
+                event.metaKey ||
+                event.altKey ||
+                event.shiftKey ||
+                !(event.target instanceof HTMLButtonElement) ||
+                (event.key !== "ArrowDown" && event.key !== "ArrowUp")
+              )
+                return;
+              const buttons = [
+                ...event.currentTarget.querySelectorAll<HTMLButtonElement>(
+                  "button[data-thread-launcher]:not(:disabled)",
+                ),
+              ];
+              const index = buttons.indexOf(event.target);
+              if (index === -1) return;
+              event.preventDefault();
+              event.stopPropagation();
+              buttons[
+                (index + (event.key === "ArrowDown" ? 1 : buttons.length - 1)) % buttons.length
+              ]?.focus();
+            }
+          : undefined
+      }
     >
-      <ThreadDetailsControl
-        aria-label={compact ? "Open file in preferred editor" : primaryLabel}
-        size={isPanel ? "sm" : "xs"}
-        variant={isPanel ? "ghost" : "outline"}
-        part="primary"
-        panel={isPanel}
-        disabled={!preferredEditor || !openInCwd || !canOpenEditor}
-        {...(enableShortcut && !backgroundThread ? { [OPEN_FAVORITE_EDITOR_ATTRIBUTE]: "" } : {})}
-        onClick={() => {
-          if (!preferredEditor) return;
-          const label = editorLabelForPlatform(preferredEditor, navigator.platform);
-          void openInEditor(preferredEditor).then((opened) => {
-            if (opened) announce(`Opened in ${label}`);
-          });
-        }}
-      >
-        {primaryOption?.Icon ? (
-          <primaryOption.Icon
+      {quickOptions.map(({ value, label, Icon, kind }) => (
+        <ThreadDetailsControl
+          key={value}
+          aria-label={`Open in ${label}`}
+          title={`Open in ${label}`}
+          data-thread-launcher={value}
+          part="row"
+          disabled={!openInCwd || !canOpenEditor}
+          {...(value === preferredEditor && enableShortcut && !backgroundThread
+            ? { [OPEN_FAVORITE_EDITOR_ATTRIBUTE]: "" }
+            : {})}
+          onClick={() => openAndAnnounce(value)}
+        >
+          <Icon
             aria-hidden="true"
-            className={cn(
-              isPanel ? THREAD_DETAILS_PANEL_ICON_CLASS : "size-3.5",
-              getOpenInIconClass(primaryOption.kind),
+            className={cn(THREAD_DETAILS_PANEL_ICON_CLASS, getOpenInIconClass(kind))}
+          />
+          <span className={cn("min-w-0 truncate", THREAD_DETAILS_PANEL_LABEL_CLASS)}>{label}</span>
+        </ThreadDetailsControl>
+      ))}
+      <PickerRow {...(isPanel ? { className: THREAD_DETAILS_PANEL_SPLIT_GROUP_CLASS } : {})}>
+        {!preferredHasQuickButton && (
+          <ThreadDetailsControl
+            aria-label={compact ? "Open file in preferred editor" : primaryLabel}
+            size={isPanel ? "sm" : "xs"}
+            variant={isPanel ? "ghost" : "outline"}
+            part="primary"
+            panel={isPanel}
+            data-thread-launcher={isPanel ? (preferredEditor ?? undefined) : undefined}
+            title={isPanel ? primaryLabel : undefined}
+            disabled={!preferredEditor || !openInCwd || !canOpenEditor}
+            {...(enableShortcut && !backgroundThread
+              ? { [OPEN_FAVORITE_EDITOR_ATTRIBUTE]: "" }
+              : {})}
+            onClick={() => {
+              if (preferredEditor) openAndAnnounce(preferredEditor);
+            }}
+          >
+            {primaryOption?.Icon ? (
+              <primaryOption.Icon
+                aria-hidden="true"
+                className={cn(
+                  isPanel ? THREAD_DETAILS_PANEL_ICON_CLASS : "size-3.5",
+                  getOpenInIconClass(primaryOption.kind),
+                )}
+              />
+            ) : isPanel ? (
+              <SquareArrowOutUpRightIcon
+                aria-hidden="true"
+                className={THREAD_DETAILS_PANEL_ICON_CLASS}
+              />
+            ) : null}
+            <span
+              className={cn(
+                compact
+                  ? "sr-only"
+                  : "sr-only @3xl/header-actions:not-sr-only @3xl/header-actions:ml-0.5",
+                isPanel &&
+                  cn("not-sr-only ml-0 min-w-0 truncate", THREAD_DETAILS_PANEL_LABEL_CLASS),
+              )}
+            >
+              {primaryLabel}
+            </span>
+          </ThreadDetailsControl>
+        )}
+        {isPanel ? (
+          !preferredHasQuickButton && (
+            <span aria-hidden="true" className={THREAD_DETAILS_PANEL_SPLIT_SEPARATOR_CLASS} />
+          )
+        ) : (
+          <GroupSeparator
+            {...(!compact ? { className: "hidden @3xl/header-actions:block" } : {})}
+          />
+        )}
+        <Menu open={menuOpen} onOpenChange={setMenuOpen}>
+          <MenuTrigger
+            disabled={isHostEditorDenied}
+            render={
+              <ThreadDetailsControl
+                aria-label="Choose editor"
+                size={isPanel ? "sm" : "icon-xs"}
+                variant={isPanel ? "ghost" : "outline"}
+                part={preferredHasQuickButton ? "row" : "secondary"}
+                panel={isPanel}
+                title="Choose editor"
+              />
+            }
+          >
+            {preferredHasQuickButton && (
+              <span className={cn("min-w-0 flex-1 truncate", THREAD_DETAILS_PANEL_LABEL_CLASS)}>
+                Other editors
+              </span>
             )}
-          />
-        ) : isPanel ? (
-          <SquareArrowOutUpRightIcon
-            aria-hidden="true"
-            className={THREAD_DETAILS_PANEL_ICON_CLASS}
-          />
-        ) : null}
-        <span
-          className={cn(
-            compact
-              ? "sr-only"
-              : "sr-only @3xl/header-actions:not-sr-only @3xl/header-actions:ml-0.5",
-            isPanel && cn("not-sr-only ml-0 min-w-0 truncate", THREAD_DETAILS_PANEL_LABEL_CLASS),
-          )}
-        >
-          {primaryLabel}
-        </span>
-      </ThreadDetailsControl>
-      {isPanel ? (
-        <span aria-hidden="true" className={THREAD_DETAILS_PANEL_SPLIT_SEPARATOR_CLASS} />
-      ) : (
-        <GroupSeparator {...(!compact ? { className: "hidden @3xl/header-actions:block" } : {})} />
-      )}
-      <Menu open={menuOpen} onOpenChange={setMenuOpen}>
-        <MenuTrigger
-          disabled={isHostEditorDenied}
-          render={
-            <ThreadDetailsControl
-              aria-label="Choose editor"
-              size={isPanel ? "sm" : "icon-xs"}
-              variant={isPanel ? "ghost" : "outline"}
-              part="secondary"
-              panel={isPanel}
+            <ChevronDownIcon
+              aria-hidden="true"
+              className={isPanel ? THREAD_DETAILS_PANEL_CHEVRON_CLASS : "size-4"}
             />
-          }
-        >
-          <ChevronDownIcon
-            aria-hidden="true"
-            className={isPanel ? THREAD_DETAILS_PANEL_CHEVRON_CLASS : "size-4"}
-          />
-        </MenuTrigger>
-        <MenuPopup
-          align="end"
-          {...(isPanel ? { anchor: panelAnchorRef } : {})}
-          className={isPanel ? "w-(--anchor-width)" : undefined}
-        >
-          {editorItems}
-        </MenuPopup>
-      </Menu>
+          </MenuTrigger>
+          <MenuPopup
+            align="end"
+            {...(isPanel ? { anchor: panelAnchorRef } : {})}
+            className={isPanel ? "w-(--anchor-width)" : undefined}
+          >
+            {editorItems}
+          </MenuPopup>
+        </Menu>
+      </PickerRow>
     </ActionGroup>
   );
 });

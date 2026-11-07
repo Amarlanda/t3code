@@ -97,6 +97,32 @@ it("still types other letters into the composer while the launcher is open", asy
   expect(received).toEqual([]);
 });
 
+it.each(["treeitem", "conversation", "body"] as const)(
+  "leaves Vim navigation keys to the focused %s",
+  async (target) => {
+    const composerKeys: string[] = [];
+    await using _screen = await render(
+      <>
+        <Chat composerKeys={composerKeys} />
+        {target !== "body" && (
+          <div
+            ref={focusOnMount}
+            tabIndex={0}
+            role={target === "treeitem" ? "treeitem" : "region"}
+            data-workspace-area={target === "conversation" ? "conversation" : undefined}
+          />
+        )}
+      </>,
+      options,
+    );
+    if (target === "body") (document.activeElement as HTMLElement).blur();
+
+    await userEvent.keyboard(target === "treeitem" ? "jkhli/" : "ih");
+
+    expect(composerKeys).toEqual([]);
+  },
+);
+
 it("leaves a non-Latin launcher letter to the launcher by its physical key", async () => {
   const composerKeys: string[] = [];
   const received: string[] = [];

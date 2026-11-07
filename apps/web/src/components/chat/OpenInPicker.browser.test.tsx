@@ -3,6 +3,7 @@ import { DEFAULT_RESOLVED_KEYBINDINGS } from "@t3tools/shared/keybindings";
 import { Cause } from "effect";
 import { AsyncResult } from "effect/reactivity";
 import { describe, expect, it, vi } from "vite-plus/test";
+import { userEvent } from "vite-plus/test/browser";
 
 import { act, fakeTimers, render as renderUi } from "../../../test/render";
 import type { RemoteOpenState } from "../../remoteOpen";
@@ -170,7 +171,7 @@ async function setup() {
 describe("host editor access", () => {
   it("uses the selected grant for both the button and a retained shortcut", async () => {
     await using fixture = await setup();
-    const { renderPicker, byLabel, primaryButton, click, pressOpenFavorite } = fixture;
+    const { renderPicker, byLabel, primaryButton, menuItems, click, pressOpenFavorite } = fixture;
     state.allowed.add(selected);
     await renderPicker();
     // Revoke without rerendering to exercise execution-time grant checks.
@@ -186,6 +187,58 @@ describe("host editor access", () => {
     expect(primaryButton().disabled).toBe(true);
     expect(byLabel("Choose editor").disabled).toBe(true);
     expect((await pressOpenFavorite()).defaultPrevented).toBe(false);
+
+    state.allowed.add(selected);
+    await renderPicker(["vscode", "gitgrove", "zed"], true);
+    using _timers = fakeTimers();
+    await act(async () => byLabel("Open in VS Code").focus());
+    await userEvent.keyboard("{ArrowDown}");
+    expect(document.activeElement).toBe(byLabel("Open in GitGrove"));
+    await userEvent.keyboard("{Enter}");
+    expect(state.run).toHaveBeenLastCalledWith({
+      environmentId: selected,
+      input: { cwd: "/work/project", editor: "gitgrove" },
+    });
+    expect(byLabel("Open in VS Code").disabled).toBe(false);
+    await pressOpenFavorite();
+    expect(state.run).toHaveBeenLastCalledWith({
+      environmentId: selected,
+      input: { cwd: "/work/project", editor: "gitgrove" },
+    });
+    await userEvent.keyboard("{ArrowUp}");
+    expect(document.activeElement).toBe(byLabel("Open in VS Code"));
+    await userEvent.keyboard("{Enter}");
+    await pressOpenFavorite();
+    expect(state.run).toHaveBeenLastCalledWith({
+      environmentId: selected,
+      input: { cwd: "/work/project", editor: "vscode" },
+    });
+
+    await click(byLabel("Choose editor"));
+    const zedItem = menuItems().find((item) => item.textContent === "Zed");
+    expect(zedItem).toBeDefined();
+    await click(zedItem!);
+    expect(byLabel("Open in Zed").disabled).toBe(false);
+    expect(byLabel("Open in GitGrove").disabled).toBe(false);
+    expect(byLabel("Open in VS Code").disabled).toBe(false);
+    await pressOpenFavorite();
+    expect(state.run).toHaveBeenLastCalledWith({
+      environmentId: selected,
+      input: { cwd: "/work/project", editor: "zed" },
+    });
+
+    state.run.mockClear();
+    state.allowed.delete(selected);
+    await click(byLabel("Open in GitGrove"));
+    await pressOpenFavorite();
+    expect(state.run).not.toHaveBeenCalled();
+    await renderPicker(["vscode", "gitgrove", "zed"], true);
+    expect(byLabel("Open in GitGrove").disabled).toBe(true);
+    expect(byLabel("Open in VS Code").disabled).toBe(true);
+    await act(async () => vi.runAllTimers());
+    for (const region of document.querySelectorAll('body > [aria-live="polite"]')) {
+      region.textContent = "";
+    }
   });
 });
 

@@ -1511,7 +1511,7 @@ function OpenCommandPaletteDialog(props: {
       kind: "action",
       value: `action:workspace-focus:${direction}`,
       title,
-      searchTerms: [title, "accessibility", "navigation", "focus", "F6"],
+      searchTerms: [title, "accessibility", "navigation", "focus", "Tab"],
       icon: <MonitorIcon className={ITEM_ICON_CLASS} />,
       shortcutCommand: direction === 1 ? "workspace.focusNext" : "workspace.focusPrevious",
       run: async () => {

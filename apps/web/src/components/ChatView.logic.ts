@@ -1138,16 +1138,19 @@ export function hasServerAcknowledgedLocalDispatch(input: {
   );
 }
 
-// Returning to the window should land the caret in the composer, so the reader can type right
-// away. The exceptions are places where focus is deliberate: another text field, a terminal in
-// the drawer or the right panel, an open dialog, menu, or popup, or a region or sidebar row
-// reached from the keyboard. A plain focused button or a clicked row yields to the composer.
+// Window return preserves NORMAL mode and deliberate focus in fields, panels, dialogs,
+// and keyboard-selected rows. Other clicked controls yield to the composer.
 export function shouldRefocusComposerOnWindowFocus(
   activeElement:
     | (Pick<Element, "tagName" | "closest" | "getAttribute"> & { isContentEditable?: boolean })
     | null,
 ): boolean {
-  if (activeElement === null || activeElement.tagName === "BODY") return true;
+  if (
+    activeElement === null ||
+    activeElement.tagName === "BODY" ||
+    activeElement.closest('[data-workspace-area="conversation"]') !== null
+  )
+    return false;
   if (
     activeElement.tagName === "INPUT" ||
     activeElement.tagName === "TEXTAREA" ||
@@ -1161,7 +1164,7 @@ export function shouldRefocusComposerOnWindowFocus(
   }
   return (
     activeElement.closest(
-      '[data-workspace-area]:focus-visible, [role="treeitem"]:focus-visible, [role="dialog"], [role="alertdialog"], [role="application"], [role="menu"], [role="listbox"], [data-slot$="-popup"], [data-terminal-owner]',
+      '[data-workspace-area]:focus-visible, [role="treeitem"]:focus-visible, [role="dialog"], [role="alertdialog"], [role="application"], [role="menu"], [role="listbox"], [data-slot$="-popup"], [data-terminal-owner], [data-thread-launcher-group]',
     ) === null
   );
 }

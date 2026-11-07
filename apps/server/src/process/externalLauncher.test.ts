@@ -370,6 +370,54 @@ for (const wsl of [false, true]) {
   );
 }
 
+// This fixture uses a POSIX executable and Linux user-local command discovery.
+it.effect.skipIf(windowsHost)(
+  "opens GitGrove for directories and existing or deleted file links",
+  () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const home = yield* fs.makeTempDirectoryScoped({ prefix: "t3-gitgrove-" });
+      const bin = path.join(home, ".local/bin");
+      const executable = path.join(bin, "gitgrove-review");
+      const workspace = path.join(home, "workspace with spaces:12");
+      const file = path.join(workspace, "file.ts");
+      yield* fs.makeDirectory(bin, { recursive: true });
+      yield* fs.makeDirectory(workspace);
+      yield* fs.writeFileString(executable, "#!/bin/sh\n");
+      yield* fs.chmod(executable, 0o755);
+      yield* fs.writeFileString(file, "");
+      const spawned: ChildProcess.StandardCommand[] = [];
+      yield* Effect.gen(function* () {
+        const launcher = yield* ExternalLauncher.ExternalLauncher;
+        assert.include(yield* launcher.resolveAvailableEditors(), "gitgrove");
+        for (const cwd of [
+          workspace,
+          file,
+          `${file}:12:4`,
+          path.join(workspace, "deleted.ts"),
+          `${path.join(workspace, "deleted", "file.ts")}:12:4`,
+        ]) {
+          yield* launcher.launchEditor({ editor: "gitgrove", cwd });
+        }
+      }).pipe(
+        Effect.provide(
+          layerTest({
+            platform: "linux",
+            env: { HOME: home, PATH: path.join(home, "empty"), DISPLAY: ":0" },
+            onSpawn: (command) => spawned.push(command),
+          }),
+        ),
+      );
+      assert.equal(spawned.length, 5);
+      for (const command of spawned) {
+        assert.equal(command.command, executable);
+        assert.deepEqual(command.args, ["--foreground", workspace]);
+        assert.equal(command.options.shell, false);
+      }
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+);
+
 for (const cwd of ["/workspace with spaces/", "/workspace with spaces/file.ts:12:4"]) {
   it.effect.skipIf(windowsHost)(
     `opens ${cwd} with the macOS Zed bundle when another zed is on PATH`,

@@ -493,11 +493,43 @@ const resolveEditorLaunch = Effect.fn("resolveEditorLaunch")(function* (
         baseArgs: "baseArgs" in editorDef ? editorDef.baseArgs : [],
       }),
     );
+    let target = input.cwd;
+    if (editorDef.id === "gitgrove") {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      let position = parseTargetPathAndPosition(target);
+      for (;;) {
+        const parent = path.dirname(target);
+        const info = yield* fs.stat(target).pipe(
+          Effect.catchIf(
+            (cause) => cause.reason._tag === "NotFound" && parent !== target,
+            () => Effect.void,
+          ),
+          Effect.mapError(
+            (cause) =>
+              new ExternalLauncherEditorSpawnError({
+                editor: editorDef.id,
+                target: input.cwd,
+                command,
+                args: [...baseArgs, target],
+                cause,
+              }),
+          ),
+        );
+        if (info !== undefined) {
+          if (info.type !== "Directory") target = parent;
+          break;
+        }
+        // Deleted diff paths still open their repository; literal colon names win over positions.
+        target = Option.isSome(position) ? position.value.path : parent;
+        position = Option.none();
+      }
+    }
     return {
       editor: editorDef.id,
       target: input.cwd,
       command,
-      args: [...baseArgs, ...resolveCommandEditorArgs(editorDef, input.cwd)],
+      args: [...baseArgs, ...resolveCommandEditorArgs(editorDef, target)],
     };
   }
 

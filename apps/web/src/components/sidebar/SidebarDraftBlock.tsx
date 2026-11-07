@@ -60,11 +60,7 @@ const SidebarDraftRow = memo(function SidebarDraftRow(props: {
     // preventDefault here would swallow Space's synthesized click and
     // navigate instead of discarding.
     if ((event.target as HTMLElement).closest("button")) return;
-    if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
-      event.preventDefault();
-      const rect = event.currentTarget.getBoundingClientRect();
-      onContextMenu(draftId, { x: rect.left, y: rect.bottom });
-    } else if (event.key === "Enter" || event.key === " ") {
+    if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       onNavigate(draftId);
     }

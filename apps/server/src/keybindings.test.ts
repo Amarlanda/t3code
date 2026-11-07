@@ -251,6 +251,79 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
       }).pipe(Effect.provide(layerKeybindings())),
   );
 
+  it.effect("migrates exact old terminal and focus defaults only once", () =>
+    Effect.gen(function* () {
+      const { keybindingsConfigPath } = yield* ServerConfig.ServerConfig;
+      const keybindings = yield* Keybindings.Keybindings;
+      const legacy: readonly KeybindingRule[] = [
+        { key: "mod+j", command: "terminal.toggle" },
+        { key: "mod+t", command: "rightPanel.new", when: "rightPanelOpen && !terminalFocus" },
+        { key: "f6", command: "workspace.focusNext" },
+        { key: "shift+f6", command: "workspace.focusPrevious" },
+        { key: "mod+f6", command: "workspace.focusNext" },
+        { key: "mod+shift+f6", command: "workspace.focusPrevious" },
+      ];
+      const custom: readonly KeybindingRule[] = [
+        { key: "alt+y", command: "terminal.toggle" },
+        { key: "mod+t", command: "script.custom.run", when: "composerFocus" },
+        { key: "mod+t", command: "rightPanel.new", when: "rightPanelOpen && previewFocus" },
+        { key: "f6", command: "workspace.focusNext", when: "terminalFocus" },
+      ];
+      yield* writeKeybindingsConfig(keybindingsConfigPath, [...custom, ...legacy]);
+
+      yield* keybindings.syncDefaultKeybindingsOnStartup;
+      const migrated = yield* readKeybindingsConfig(keybindingsConfigPath);
+      for (const rule of legacy) assert.notDeepInclude(migrated, rule);
+      for (const rule of custom) assert.deepInclude(migrated, rule);
+      const terminal = { key: "mod+t", command: "terminal.toggle" } as const;
+      const panel = {
+        key: "mod+alt+t",
+        command: "rightPanel.new",
+        when: "rightPanelOpen && !terminalFocus",
+      } as const;
+      assert.deepInclude(migrated, terminal);
+      assert.deepInclude(migrated, panel);
+      assert.deepInclude(migrated, { key: "mod+j", command: "terminal.cycleLayout" });
+      assert.isBelow(
+        migrated.findIndex(
+          (rule) => rule.command === terminal.command && rule.key === terminal.key,
+        ),
+        migrated.findIndex((rule) => rule.command === "script.custom.run"),
+      );
+
+      yield* writeKeybindingsConfig(keybindingsConfigPath, legacy);
+      yield* keybindings.syncDefaultKeybindingsOnStartup;
+      const restored = yield* readKeybindingsConfig(keybindingsConfigPath);
+      for (const rule of legacy) assert.deepInclude(restored, rule);
+      assert.notDeepInclude(restored, terminal);
+      assert.notDeepInclude(restored, panel);
+    }).pipe(Effect.provide(layerKeybindings())),
+  );
+
+  it.effect("keeps old terminal bindings when custom rules occupy their replacements", () =>
+    Effect.gen(function* () {
+      const { keybindingsConfigPath } = yield* ServerConfig.ServerConfig;
+      const keybindings = yield* Keybindings.Keybindings;
+      const existing: readonly KeybindingRule[] = [
+        { key: "mod+j", command: "terminal.toggle" },
+        { key: "mod+t", command: "rightPanel.new", when: "rightPanelOpen && !terminalFocus" },
+        { key: "mod+t", command: "script.custom-terminal.run" },
+        {
+          key: "mod+alt+t",
+          command: "script.custom-panel.run",
+          when: "rightPanelOpen && !terminalFocus",
+        },
+      ];
+      yield* writeKeybindingsConfig(keybindingsConfigPath, existing);
+
+      yield* keybindings.syncDefaultKeybindingsOnStartup;
+      const persisted = yield* readKeybindingsConfig(keybindingsConfigPath);
+      for (const rule of existing) assert.deepInclude(persisted, rule);
+      assert.notDeepInclude(persisted, { key: "mod+t", command: "terminal.toggle" });
+      assert.notDeepInclude(persisted, { key: "mod+j", command: "terminal.cycleLayout" });
+    }).pipe(Effect.provide(layerKeybindings())),
+  );
+
   it.effect("adds a late default to an existing command once", () =>
     Effect.gen(function* () {
       const { keybindingsConfigPath } = yield* ServerConfig.ServerConfig;
@@ -329,7 +402,7 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
     return Effect.gen(function* () {
       const { keybindingsConfigPath } = yield* ServerConfig.ServerConfig;
       yield* writeKeybindingsConfig(keybindingsConfigPath, [
-        { key: "mod+j", command: "script.custom-action.run" },
+        { key: "mod+t", command: "script.custom-action.run" },
       ]);
 
       yield* Effect.gen(function* () {

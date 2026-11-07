@@ -9,6 +9,11 @@ In **Settings → Chat → Send shortcut**, choose whether Enter sends, requires
 `mod+Enter` for multiline prompts, or always requires `mod+Enter`. `Shift+Enter`
 inserts a new line. This applies to the web and desktop composer at desktop widths.
 
+Escape leaves the composer for NORMAL mode. Left/Right Arrow or `h`/`l` moves between
+Threads, the conversation, and editor actions without entering the message input.
+Press `i` from NORMAL mode to write. See [Keyboard focus](./keyboard-focus.md) for
+navigation within each area.
+
 **Follow-up behavior** chooses Queue or Steer while the agent runs. Use
 `mod+Enter` to do the opposite for one message, even when the send shortcut
 requires a modifier. `mod+Alt+Enter` sends, keeps that thread running in the
@@ -39,9 +44,8 @@ the provider list. Use Up/Down to move and Enter to choose. Right returns to
 model search. `mod+shift+up` and `mod+shift+down` switch providers directly and clear the
 search. These provider shortcuts can also be changed in Settings.
 
-These shortcuts run inside the focused web or desktop client. `mod` uses Command
-on macOS and Ctrl on Windows and Linux, including GNOME, KDE Plasma, Niri, and
-Hyprland. If a custom desktop shortcut takes the same keys, choose another binding
+These shortcuts run inside the focused web or desktop client. `mod` accepts Command (Meta/Super) or Control. Command is shown first on macOS
+and Linux. If a custom desktop shortcut takes the same keys, choose another binding
 in Settings.
 
 ## Copy pull request references
@@ -105,7 +109,7 @@ Project scripts use `script.{id}.run`, such as `script.test.run`.
 ## Key syntax
 
 Join modifiers and a key with `+`, such as `mod+shift+d` or `ctrl+l`.
-`mod` means Command on macOS and Control elsewhere. Other modifiers are
+`mod` accepts either Command (Meta/Super) or Control. Other modifiers are
 `cmd` / `meta`, `ctrl` / `control`, `alt` / `option`, and `shift`.
 
 ## When conditions

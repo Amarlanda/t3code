@@ -78,6 +78,7 @@ import {
   animateSidebarLayoutChanges,
   hasUnseenCompletion,
   resolveSidebarRowAccessibility,
+  isSidebarRenameShortcut,
   type SidebarDropVerb,
   resolveSidebarThreadStatus,
   resolveThreadLastVisitedAt,
@@ -835,7 +836,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   const handleKeyDown = (event: ReactKeyboardEvent) => {
     if (event.target !== event.currentTarget) return;
     if (
-      event.key === "F2" &&
+      isSidebarRenameShortcut(event.nativeEvent) &&
       !isRenaming &&
       readEnvironmentScope(threadRef.environmentId, AuthOrchestrationOperateScope)
     ) {

@@ -155,6 +155,21 @@ describe("DesktopApplicationMenu", () => {
         } as unknown as KeyboardEvent,
       );
       assert.isFalse(yield* Deferred.isDone(selectedAction));
+
+      const commandPaste = editMenu.submenu.find((item) => item.accelerator === "Super+Shift+V");
+      assert.isDefined(commandPaste);
+      assert.isFalse(commandPaste.visible);
+      commandPaste.click?.({} as Electron.MenuItem, undefined, {
+        triggeredByAccelerator: true,
+      } as Electron.KeyboardEvent);
+      assert.equal(yield* Deferred.await(selectedAction), "paste-as-text");
+
+      const superZoom = template
+        .flatMap((menu) => (Array.isArray(menu.submenu) ? menu.submenu : []))
+        .filter((item) =>
+          /^Super\+(?:=|-|Plus|0|num0|numadd|numsub)$/u.test(item.accelerator ?? ""),
+        );
+      assert.deepEqual(superZoom, []);
     }),
   );
 
@@ -230,31 +245,58 @@ describe("DesktopApplicationMenu", () => {
           items.find((item) => item.accelerator?.toLowerCase().endsWith("+w")),
           platform,
         );
+        if (platform === "darwin") {
+          assert.isUndefined(items.find((item) => item.accelerator?.includes("Super")));
+        } else {
+          assert.deepEqual(
+            items
+              .filter((item) => item.role && item.accelerator?.includes("Super"))
+              .map((item) => [item.role, item.accelerator, item.visible]),
+            [
+              ["undo", "Super+Z", false],
+              ["redo", "Super+Shift+Z", false],
+              ["cut", "Super+X", false],
+              ["copy", "Super+C", false],
+              ["paste", "Super+V", false],
+              ["selectAll", "Super+A", false],
+            ],
+          );
+        }
       }
     }),
   );
 
-  it.effect("reloads the main window even while a browser page has focus", () =>
-    Effect.gen(function* () {
-      const selectedAction = yield* Deferred.make<string>();
-      const applicationMenuTemplate =
-        yield* Deferred.make<readonly Electron.MenuItemConstructorOptions[]>();
+  it.effect(
+    "routes Control and Command menu actions to the main window while a browser page has focus",
+    () =>
+      Effect.gen(function* () {
+        for (const [accelerator, expected] of [
+          ["CmdOrCtrl+R", "main-reload"],
+          ["Super+,", "open-settings"],
+          ["Super+R", "main-reload"],
+          ["Shift+Super+R", "main-forceReload"],
+          ["Super+Shift+I", "main-toggleDevTools"],
+        ]) {
+          const selectedAction = yield* Deferred.make<string>();
+          const applicationMenuTemplate =
+            yield* Deferred.make<readonly Electron.MenuItemConstructorOptions[]>();
 
-      yield* configureMenu(selectedAction, applicationMenuTemplate);
+          yield* configureMenu(selectedAction, applicationMenuTemplate);
 
-      const template = yield* Deferred.await(applicationMenuTemplate);
-      const viewMenu = template.find((item) => item.label === "View");
-      if (!Array.isArray(viewMenu?.submenu)) {
-        throw new Error("Expected View menu submenu to be an array.");
-      }
-      const reload = viewMenu.submenu.find((item) => item.label === "Reload");
-      assert.equal(reload?.accelerator, "CmdOrCtrl+R");
-      if (typeof reload?.click !== "function") {
-        throw new Error("Expected Reload menu item to have a click handler.");
-      }
+          const template = yield* Deferred.await(applicationMenuTemplate);
+          const matches = template
+            .flatMap((menu) => (Array.isArray(menu.submenu) ? menu.submenu : []))
+            .filter((item) => item.accelerator === accelerator);
+          assert.lengthOf(matches, 1, accelerator);
+          const item = matches[0];
+          if (typeof item?.click !== "function") {
+            throw new Error(`Expected ${accelerator} menu item to have a click handler.`);
+          }
+          if (accelerator?.includes("Super")) assert.isFalse(item.visible);
 
-      reload.click({} as Electron.MenuItem, {} as Electron.BrowserWindow, {} as KeyboardEvent);
-      assert.equal(yield* Deferred.await(selectedAction), "main-reload");
-    }),
+          item.click({} as Electron.MenuItem, {} as Electron.BrowserWindow, {} as KeyboardEvent);
+          assert.equal(yield* Deferred.await(selectedAction), expected);
+        }
+      }),
   );
 });

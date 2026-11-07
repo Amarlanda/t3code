@@ -54,6 +54,31 @@ export function shouldNavigateAfterThreadPark(input: {
 
 const THREAD_JUMP_HINT_SHOW_DELAY_MS = 200;
 
+export function isSidebarRenameShortcut(
+  event: Pick<
+    KeyboardEvent,
+    | "key"
+    | "defaultPrevented"
+    | "isComposing"
+    | "keyCode"
+    | "ctrlKey"
+    | "altKey"
+    | "metaKey"
+    | "shiftKey"
+  >,
+): boolean {
+  return (
+    event.key === "r" &&
+    !event.defaultPrevented &&
+    !event.isComposing &&
+    event.keyCode !== 229 &&
+    !event.ctrlKey &&
+    !event.altKey &&
+    !event.metaKey &&
+    !event.shiftKey
+  );
+}
+
 export function resolveSidebarRowAccessibility(input: {
   readonly title: string;
   readonly statusLabel: string | null;

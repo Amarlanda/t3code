@@ -12,26 +12,48 @@ becomes ready. Opening or switching to a terminal explicitly still focuses it.
 
 ## Move between workspace areas
 
-On web and desktop, press `F6` or `Shift+F6` to move between the Threads sidebar,
-conversation, message input, and visible panels. Navigation wraps around and restores
-the last focused control in each area. Pull Requests has a page content area. In Settings,
-`F6` moves between the section list and the open section. Hidden areas are skipped. Other
-dialogs and form popups retain focus; a thread context menu closes when an area command
-moves focus away.
+Use `Tab` and `Shift+Tab` to move between controls. In NORMAL mode, `Tab` and
+`Shift+Tab` move between workspace areas. **Focus Next Workspace Area** and
+**Focus Previous Workspace Area** are also available in the command palette and
+can be assigned custom shortcuts in Settings → Keybindings. Hidden areas are skipped.
+No function keys are required.
 
-In a browser, plain `F6` may move to the browser's own toolbar. Use `mod+F6` and
-`mod+Shift+F6` instead (`mod` is Command on macOS and Ctrl elsewhere). **Focus Next
-Workspace Area** and **Focus Previous Workspace Area** are also in the command palette and
-can be remapped in Settings > Keybindings.
+## Leave and return to typing
+
+Escape leaves the message input and enters NORMAL mode. If a composer menu is open,
+Escape closes that menu first. In NORMAL mode, press `i` to focus the message input and
+return to INSERT mode. Other letter keys do not start typing in the message input.
+
+From NORMAL mode, Left Arrow or `h` focuses the Threads sidebar. From the sidebar,
+Right Arrow or `l` returns to the conversation in NORMAL mode. Right Arrow or `l` from the conversation
+opens the thread details and focuses the first editor action. In the actions, use
+Up/Down to choose and Enter to launch; Left Arrow or `h` returns to the conversation
+in NORMAL mode. These navigation keys leave the message input unfocused.
+
+You can also focus the input by clicking it or using a workspace focus command.
 
 ## Browse threads
 
 Tab enters the sidebar once. Up and Down move between threads without opening them; Enter
-opens the focused thread or toggles a group. Right and Left expand and collapse groups.
-Tab moves from the focused thread to its buttons. `F2` renames the focused thread.
+opens the focused thread or toggles a group. Left Arrow or `h` collapses a group or
+selects its parent; Right Arrow or `l` returns to the conversation in NORMAL mode.
+Tab moves from the focused thread to its buttons. `r` renames the focused thread.
 
-Press `Shift+F10` or the Context Menu key to open the focused thread's menu. Use the arrow
+Press `m` or the Context Menu key to open the focused thread's menu. Use the arrow
 keys to move through it, Enter to choose, and Escape to close it.
+
+## Terminal layouts
+
+**Command+T** opens or hides the terminal. **Command+J** cycles between bottom half,
+side by side, and full workspace. The layout buttons in the terminal header offer
+the same choices. Switching layouts keeps the shell session running; hiding the
+terminal returns focus to the message input. Control works as an alternative modifier.
+
+## Inspect a desktop element
+
+On desktop, hold Shift while right-clicking to reach **Inspect Element** in areas with
+their own menus. Streamed browser pages keep their page interactions; this shortcut does
+not inspect their remote page content.
 
 The Settings section list works the same way: Up and Down move between sections, and Enter
 opens one.

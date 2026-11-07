@@ -145,6 +145,13 @@ export const EDITORS = [
     launchStyle: "line-column",
     jetbrainsProductCode: "WS",
   },
+  {
+    id: "gitgrove",
+    label: "GitGrove",
+    commands: ["gitgrove-review"],
+    baseArgs: ["--foreground"],
+    launchStyle: "direct-path",
+  },
   { id: "file-manager", label: "File Manager", commands: null, launchStyle: "direct-path" },
 ] as const satisfies ReadonlyArray<EditorDefinition>;
 

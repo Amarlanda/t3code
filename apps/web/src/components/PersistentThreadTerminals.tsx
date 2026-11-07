@@ -22,7 +22,11 @@ import {
 import { useProject, useQuietThreadShell } from "../state/entities";
 import { useEnvironmentScope } from "../state/session";
 import { useKnownTerminalSessions } from "../state/terminalSessions";
-import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
+import {
+  selectThreadTerminalUiState,
+  useTerminalUiStateStore,
+  type TerminalLayout,
+} from "../terminalUiStateStore";
 import { useThreadTerminalActions } from "./terminal/useThreadTerminalActions";
 import ThreadTerminalDrawer from "./ThreadTerminalDrawer";
 import { resolveTerminalWorktreePath } from "./ChatView.logic";
@@ -114,6 +118,7 @@ export const PersistentThreadTerminalDrawer = memo(function PersistentThreadTerm
     selectThreadTerminalUiState(state.terminalUiStateByThreadKey, threadRef),
   );
   const visible = active && terminalUiState.terminalOpen;
+  const layout = terminalUiState.terminalLayout ?? "bottom";
   const knownTerminalSessions = useKnownTerminalSessions({
     environmentId: threadRef.environmentId,
     threadId,
@@ -194,6 +199,15 @@ export const PersistentThreadTerminalDrawer = memo(function PersistentThreadTerm
   const setTerminalHeight = (height: number) => {
     storeSetTerminalHeight(threadRef, height);
   };
+  const setTerminalLayout = (next: TerminalLayout) => {
+    useRightPanelStore.getState().setMaximized(threadRef, false);
+    useTerminalUiStateStore.getState().setTerminalLayout(threadRef, next);
+    focusActiveDrawerTerminal(threadRef);
+  };
+  const hideTerminal = () => {
+    useTerminalUiStateStore.getState().setTerminalOpen(threadRef, false);
+    focusActiveDrawerTerminal(threadRef);
+  };
 
   const launchDrawerTerminal = (place: (terminalId: string) => void) => {
     if (!cwd) return;
@@ -241,14 +255,24 @@ export const PersistentThreadTerminalDrawer = memo(function PersistentThreadTerm
   return (
     <div
       className={cn(
-        "grid shrink-0 overflow-clip",
+        "grid min-h-0 min-w-0 shrink-0 overflow-clip",
         active ? (visible ? "grid-rows-[1fr]" : "grid-rows-[0fr]") : "hidden",
         active &&
+          visible &&
+          layout === "side" &&
+          "col-start-2 row-start-2 h-full border-l border-border/80",
+        active && visible && layout === "full" && "flex-1",
+        layout === "bottom" &&
+          active &&
           "[[data-panel-animations=true]_&]:transition-[grid-template-rows] [[data-panel-animations=true]_&]:duration-(--panel-animation-duration) [[data-panel-animations=true]_&]:ease-out",
-        active && visible && "[[data-panel-animations=true]_&]:starting:grid-rows-[0fr]!",
+        layout === "bottom" &&
+          active &&
+          visible &&
+          "[[data-panel-animations=true]_&]:starting:grid-rows-[0fr]!",
       )}
+      data-terminal-layout={layout}
     >
-      <div className="min-h-0 overflow-clip">
+      <div className={cn("min-h-0 overflow-clip", layout !== "bottom" && "h-full")}>
         <ThreadTerminalDrawer
           threadRef={threadRef}
           threadId={threadId}
@@ -258,6 +282,9 @@ export const PersistentThreadTerminalDrawer = memo(function PersistentThreadTerm
           visible={visible}
           height={terminalUiState.terminalHeight}
           composerHeight={composerHeight}
+          layout={layout}
+          onLayoutChange={setTerminalLayout}
+          onHide={hideTerminal}
           // Known-session order is MRU and changes on focus; persisted store order keeps sidebar labels stable.
           terminalIds={canOperateTerminal ? terminalUiState.terminalIds : serverOrderedTerminalIds}
           activeTerminalId={terminalUiState.activeTerminalId}

@@ -314,6 +314,53 @@ export const make = Effect.gen(function* () {
       },
     );
 
+    if (environment.platform !== "darwin") {
+      const editAccelerators = {
+        undo: "Super+Z",
+        redo: "Super+Shift+Z",
+        cut: "Super+X",
+        copy: "Super+C",
+        paste: "Super+V",
+        selectAll: "Super+A",
+      };
+      for (const menu of template) {
+        if (!Array.isArray(menu.submenu)) continue;
+        menu.submenu = menu.submenu.flatMap((item) => {
+          if (item.role && item.role in editAccelerators) {
+            return [
+              item,
+              {
+                ...item,
+                accelerator: editAccelerators[item.role as keyof typeof editAccelerators],
+                visible: false,
+              },
+            ];
+          }
+          if (!item.accelerator || !item.click || item.role) return [item];
+          // Super with plus, minus or 0 resizes tiles in the window manager; never zoom on it.
+          if (/\+(?:=|-|Plus|0|num0|numadd|numsub)$/u.test(item.accelerator)) return [item];
+          const accelerator = item.accelerator.replace(
+            /(^|\+)(?:CmdOrCtrl|Ctrl)(?=\+)/u,
+            "$1Super",
+          );
+          if (accelerator === item.accelerator) return [item];
+          return [
+            item,
+            {
+              ...item,
+              accelerator,
+              visible: false,
+              // Chromium only owns Ctrl+Shift+V off macOS; Super needs one native paste.
+              click:
+                item.click === pasteAsTextClick
+                  ? () => runMenuEffect("paste-as-text", dispatchMenuAction("paste-as-text"))
+                  : item.click,
+            },
+          ];
+        });
+      }
+    }
+
     yield* electronMenu.setApplicationMenu(template);
   }).pipe(Effect.withSpan("desktop.menu.configure"));
 

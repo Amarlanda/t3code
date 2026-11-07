@@ -4,14 +4,17 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { resolveStorage } from "./lib/storage";
 import {
-  DEFAULT_THREAD_TERMINAL_HEIGHT,
   DEFAULT_THREAD_TERMINAL_ID,
   MAX_TERMINALS_PER_GROUP,
   type ThreadTerminalGroup,
 } from "./types";
 
+export type TerminalLayout = "bottom" | "side" | "full";
+
 interface ThreadTerminalUiState {
   terminalOpen: boolean;
+  terminalLayout?: TerminalLayout;
+  /** Zero follows half of the available workspace height. */
   terminalHeight: number;
   terminalIds: string[];
   activeTerminalId: string;
@@ -164,6 +167,7 @@ function threadTerminalUiStateEqual(
 ): boolean {
   return (
     left.terminalOpen === right.terminalOpen &&
+    (left.terminalLayout ?? "bottom") === (right.terminalLayout ?? "bottom") &&
     left.terminalHeight === right.terminalHeight &&
     left.activeTerminalId === right.activeTerminalId &&
     left.activeTerminalGroupId === right.activeTerminalGroupId &&
@@ -174,7 +178,8 @@ function threadTerminalUiStateEqual(
 
 const DEFAULT_THREAD_TERMINAL_UI_STATE: ThreadTerminalUiState = Object.freeze({
   terminalOpen: false,
-  terminalHeight: DEFAULT_THREAD_TERMINAL_HEIGHT,
+  terminalLayout: "bottom",
+  terminalHeight: 0,
   terminalIds: [],
   activeTerminalId: "",
   terminalGroups: [],
@@ -209,10 +214,12 @@ function normalizeThreadTerminalUiState(state: ThreadTerminalUiState): ThreadTer
 
   const normalized: ThreadTerminalUiState = {
     terminalOpen: state.terminalOpen,
+    terminalLayout:
+      state.terminalLayout === "side" || state.terminalLayout === "full"
+        ? state.terminalLayout
+        : "bottom",
     terminalHeight:
-      Number.isFinite(state.terminalHeight) && state.terminalHeight > 0
-        ? state.terminalHeight
-        : DEFAULT_THREAD_TERMINAL_HEIGHT,
+      Number.isFinite(state.terminalHeight) && state.terminalHeight >= 0 ? state.terminalHeight : 0,
     terminalIds: nextTerminalIds,
     activeTerminalId,
     terminalGroups,
@@ -359,6 +366,15 @@ function setThreadTerminalHeight(
   return { ...normalized, terminalHeight: height };
 }
 
+function setThreadTerminalLayout(state: ThreadTerminalUiState, layout: TerminalLayout) {
+  const normalized = normalizeThreadTerminalUiState(state);
+  return {
+    ...normalized,
+    terminalLayout: layout,
+    terminalHeight: layout === "bottom" ? 0 : normalized.terminalHeight,
+  };
+}
+
 function splitThreadTerminal(
   state: ThreadTerminalUiState,
   terminalId: string,
@@ -441,6 +457,7 @@ function closeThreadTerminal(
 
   return normalizeThreadTerminalUiState({
     terminalOpen: normalized.terminalOpen,
+    terminalLayout: normalized.terminalLayout ?? "bottom",
     terminalHeight: normalized.terminalHeight,
     terminalIds: remainingTerminalIds,
     activeTerminalId: nextActiveTerminalId,
@@ -563,6 +580,8 @@ interface TerminalUiStateStoreState {
   suppressedTerminalIdsByThreadKey: Record<string, string[]>;
   setTerminalOpen: (threadRef: ScopedThreadRef, open: boolean) => void;
   setTerminalHeight: (threadRef: ScopedThreadRef, height: number) => void;
+  setTerminalLayout: (threadRef: ScopedThreadRef, layout: TerminalLayout) => void;
+  cycleTerminalLayout: (threadRef: ScopedThreadRef) => void;
   splitTerminal: (threadRef: ScopedThreadRef, terminalId: string) => void;
   splitTerminalVertical: (threadRef: ScopedThreadRef, terminalId: string) => void;
   newTerminal: (threadRef: ScopedThreadRef, terminalId: string) => void;
@@ -637,6 +656,19 @@ export const useTerminalUiStateStore = create<TerminalUiStateStoreState>()(
         },
         setTerminalHeight: (threadRef, height) =>
           updateTerminal(threadRef, (state) => setThreadTerminalHeight(state, height)),
+        setTerminalLayout: (threadRef, layout) =>
+          updateTerminal(threadRef, (state) => setThreadTerminalLayout(state, layout)),
+        cycleTerminalLayout: (threadRef) =>
+          updateTerminal(threadRef, (state) =>
+            setThreadTerminalLayout(
+              state,
+              state.terminalLayout === "side"
+                ? "full"
+                : state.terminalLayout === "full"
+                  ? "bottom"
+                  : "side",
+            ),
+          ),
         splitTerminal: (threadRef, terminalId) =>
           updateTerminal(threadRef, (state) => splitThreadTerminal(state, terminalId), {
             terminalId,

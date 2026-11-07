@@ -108,6 +108,49 @@ const LATE_DEFAULT_KEYBINDINGS: ReadonlyArray<{
   },
 ];
 
+const TERMINAL_LAYOUT_MIGRATION_ID = "terminal-layout-shortcuts-v1";
+const TERMINAL_LAYOUT_DEFAULT_CHANGES: ReadonlyArray<{
+  readonly previous: KeybindingRule;
+  readonly replacement?: KeybindingRule;
+}> = [
+  {
+    previous: { key: "mod+j", command: "terminal.toggle" },
+    replacement: { key: "mod+t", command: "terminal.toggle" },
+  },
+  {
+    previous: { key: "mod+t", command: "rightPanel.new", when: "rightPanelOpen && !terminalFocus" },
+    replacement: {
+      key: "mod+alt+t",
+      command: "rightPanel.new",
+      when: "rightPanelOpen && !terminalFocus",
+    },
+  },
+  { previous: { key: "f6", command: "workspace.focusNext" } },
+  { previous: { key: "shift+f6", command: "workspace.focusPrevious" } },
+  { previous: { key: "mod+f6", command: "workspace.focusNext" } },
+  { previous: { key: "mod+shift+f6", command: "workspace.focusPrevious" } },
+];
+
+function migrateTerminalLayoutDefaults(config: readonly KeybindingRule[]) {
+  const changeFor = (rule: KeybindingRule) =>
+    TERMINAL_LAYOUT_DEFAULT_CHANGES.find(({ previous }) => isSameKeybindingRule(rule, previous));
+  const customRules = config.filter((rule) => !changeFor(rule));
+  const replacements: KeybindingRule[] = [];
+  const retained = config.filter((rule) => {
+    const change = changeFor(rule);
+    if (!change) return true;
+    const replacement = change.replacement;
+    if (!replacement) return false;
+    if (customRules.some((custom) => isSameKeybindingRule(custom, replacement))) return false;
+    if (customRules.some((custom) => hasSameShortcutContext(custom, replacement))) return true;
+    if (!replacements.some((entry) => isSameKeybindingRule(entry, replacement))) {
+      replacements.push(replacement);
+    }
+    return false;
+  });
+  return retained.length === config.length ? config : [...replacements, ...retained];
+}
+
 function keybindingShortcutContext(rule: KeybindingRule): string | null {
   const parsed = parseKeybindingShortcut(rule.key);
   if (!parsed) return null;
@@ -448,15 +491,17 @@ const make = Effect.gen(function* () {
   const syncDefaultKeybindingsOnStartup = upsertSemaphore.withPermits(1)(
     Effect.gen(function* () {
       const appliedMigrationIds = yield* readAppliedMigrationIds;
+      const migrateTerminalLayout = !appliedMigrationIds.has(TERMINAL_LAYOUT_MIGRATION_ID);
       const pendingLateDefaults = LATE_DEFAULT_KEYBINDINGS.filter(
         (late) => !appliedMigrationIds.has(late.id),
       );
       const configExists = yield* readConfigExists;
       if (!configExists) {
         yield* writeConfigAtomically(DEFAULT_KEYBINDINGS);
-        if (pendingLateDefaults.length > 0) {
+        if (pendingLateDefaults.length > 0 || migrateTerminalLayout) {
           yield* recordAppliedMigrations([
             ...appliedMigrationIds,
+            TERMINAL_LAYOUT_MIGRATION_ID,
             ...LATE_DEFAULT_KEYBINDINGS.map((late) => late.id),
           ]);
         }
@@ -476,7 +521,9 @@ const make = Effect.gen(function* () {
         yield* Cache.invalidate(resolvedConfigCache, resolvedConfigCacheKey);
         return;
       }
-      const customConfig = runtimeConfig.keybindings;
+      const customConfig = migrateTerminalLayout
+        ? migrateTerminalLayoutDefaults(runtimeConfig.keybindings)
+        : runtimeConfig.keybindings;
       const existingCommands = new Set(customConfig.map((entry) => entry.command));
       const missingDefaults: KeybindingRule[] = [];
       const shortcutConflictWarnings: Array<{
@@ -546,15 +593,16 @@ const make = Effect.gen(function* () {
           commands: skippedDefaults.map((rule) => rule.command),
         });
       }
-      if (defaultsToAppend.length > 0) {
+      if (defaultsToAppend.length > 0 || customConfig !== runtimeConfig.keybindings) {
         yield* writeConfigAtomically([...defaultsToAppend, ...customConfig]);
       }
       const settledLateDefaults = pendingLateDefaults.filter(
         (late) => !skippedDefaults.includes(late.rule),
       );
-      if (settledLateDefaults.length > 0) {
+      if (settledLateDefaults.length > 0 || migrateTerminalLayout) {
         yield* recordAppliedMigrations([
           ...appliedMigrationIds,
+          TERMINAL_LAYOUT_MIGRATION_ID,
           ...settledLateDefaults.map((late) => late.id),
         ]);
       }

@@ -60,6 +60,73 @@ export class ElectronMenu extends Context.Service<
   }
 >()("@t3tools/desktop/electron/ElectronMenu") {}
 
+export function handleCommandMenuInput(
+  event: Pick<Electron.Event, "preventDefault">,
+  input: Electron.Input,
+  platform: NodeJS.Platform,
+  contents: Electron.WebContents,
+): boolean {
+  if (
+    platform === "darwin" ||
+    input.type !== "keyDown" ||
+    !input.meta ||
+    input.control ||
+    input.isComposing
+  )
+    return false;
+  const matches = (item: Electron.MenuItem): boolean => {
+    if (!item.enabled || !item.accelerator) return false;
+    const parts = item.accelerator.toLowerCase().split("+");
+    const key = parts.pop();
+    if (!parts.includes("super") || parts.includes("alt") !== input.alt) return false;
+    if (key !== "plus" && parts.includes("shift") !== input.shift) return false;
+    if (key === "numadd") return input.code === "NumpadAdd";
+    if (key === "numsub") return input.code === "NumpadSubtract";
+    if (key === "num0") return input.code === "Numpad0";
+    return input.key.toLowerCase() === (key === "plus" ? "+" : key);
+  };
+  const find = (menu: Electron.Menu): Electron.MenuItem | undefined => {
+    for (const item of menu.items) {
+      if (matches(item)) return item;
+      if (item.submenu) {
+        const match = find(item.submenu);
+        if (match) return match;
+      }
+    }
+    return undefined;
+  };
+  const menu = Electron.Menu.getApplicationMenu();
+  const item = menu && find(menu);
+  if (!item) return false;
+  // Linux Super accelerators can leave printable input behind; cancel both input and native dispatch.
+  event.preventDefault();
+  if (
+    ["undo", "redo", "cut", "copy", "paste", "selectall"].includes(item.role?.toLowerCase() ?? "")
+  ) {
+    // Keep rich-editor history on its keyboard path; nested input would reset Chromium's Meta-char suppression.
+    const modifiers: Array<"control" | "shift"> = input.shift ? ["control", "shift"] : ["control"];
+    setImmediate(() => {
+      if (contents.isDestroyed()) return;
+      for (const type of ["keyDown", "keyUp"] as const) {
+        contents.sendInputEvent({ type, keyCode: input.key, modifiers });
+      }
+    });
+    return true;
+  }
+  item.click(
+    {
+      ctrlKey: input.control,
+      shiftKey: input.shift,
+      altKey: input.alt,
+      metaKey: input.meta,
+      triggeredByAccelerator: true,
+    },
+    Electron.BaseWindow.getFocusedWindow(),
+    contents,
+  );
+  return true;
+}
+
 function normalizeContextMenuItems(source: readonly ContextMenuItem[]): ContextMenuItem[] {
   const normalizedItems: ContextMenuItem[] = [];
 
@@ -96,7 +163,7 @@ function normalizeContextMenuItems(source: readonly ContextMenuItem[]): ContextM
   return normalizedItems;
 }
 
-// popup() takes window points; renderer CSS coordinates must account for page zoom.
+// popup() and inspectElement() take window points; renderer CSS coordinates need page zoom.
 const normalizePosition = (
   position: Option.Option<ElectronMenuPosition>,
   zoomFactor: number,
@@ -239,11 +306,30 @@ export const make = Effect.gen(function* () {
         };
 
         try {
-          const menu = Electron.Menu.buildFromTemplate(buildTemplate(normalizedItems, complete));
-          const popupPosition = normalizePosition(
-            input.position,
-            input.window.webContents.getZoomFactor(),
+          const zoomFactor = input.window.webContents.getZoomFactor();
+          const popupPosition = normalizePosition(input.position, zoomFactor);
+          const inspectPosition = Option.getOrElse(popupPosition, () => {
+            const cursor = Electron.screen.getCursorScreenPoint();
+            const bounds = input.window.getContentBounds();
+            return {
+              x: Math.max(0, cursor.x - bounds.x),
+              y: Math.max(0, cursor.y - bounds.y),
+            };
+          });
+          const template = buildTemplate(normalizedItems, complete);
+          template.push(
+            { type: "separator" },
+            {
+              label: "Inspect Element",
+              click: () => {
+                if (!input.window.isDestroyed() && !input.window.webContents.isDestroyed()) {
+                  input.window.webContents.inspectElement(inspectPosition.x, inspectPosition.y);
+                }
+                complete(Option.none());
+              },
+            },
           );
+          const menu = Electron.Menu.buildFromTemplate(template);
           const popupOptions = Option.match(popupPosition, {
             onNone: (): Electron.PopupOptions => ({
               window: input.window,

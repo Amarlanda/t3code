@@ -67,6 +67,39 @@ describe("terminalUiStateStore actions", () => {
     ).toEqual(["env-b-terminal"]);
   });
 
+  it("cycles drawer layout without changing sessions, splits, focus, or another environment", () => {
+    const store = useTerminalUiStateStore.getState();
+    store.newTerminal(THREAD_REF, "shell-1");
+    store.splitTerminalVertical(THREAD_REF, "shell-2");
+    store.setActiveTerminal(THREAD_REF, "shell-1");
+    store.setTerminalHeight(THREAD_REF, 320);
+    const read = () =>
+      selectThreadTerminalUiState(
+        useTerminalUiStateStore.getState().terminalUiStateByThreadKey,
+        THREAD_REF,
+      );
+    const before = read();
+    for (const layout of ["side", "full", "bottom"] as const) {
+      store.cycleTerminalLayout(THREAD_REF);
+      expect(read()).toEqual({
+        ...before,
+        terminalLayout: layout,
+        terminalHeight: layout === "bottom" ? 0 : 320,
+      });
+    }
+    store.setTerminalLayout(THREAD_REF, "full");
+    store.setTerminalOpen(THREAD_REF, false);
+    store.setTerminalOpen(THREAD_REF, true);
+    expect(read().terminalLayout).toBe("full");
+    expect(read().terminalIds).toEqual(before.terminalIds);
+    expect(
+      selectThreadTerminalUiState(
+        useTerminalUiStateStore.getState().terminalUiStateByThreadKey,
+        OTHER_THREAD_REF,
+      ).terminalLayout,
+    ).toBe("bottom");
+  });
+
   it("drops persisted entries whose thread keys are not valid scoped keys", () => {
     const migrated = migratePersistedTerminalUiStateStoreState(
       {

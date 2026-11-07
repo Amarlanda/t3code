@@ -8,6 +8,7 @@ import { PopoverCreateHandle } from "../ui/popover";
 import { ChatCanvasContext } from "./ChatCanvasContext";
 import { resolveChatCanvasLayout } from "./chatCanvasLayout";
 import { ThreadDetailsCard } from "./ThreadDetailsCard";
+import { requestWorkspaceFocus, startWorkspaceFocus } from "../../lib/workspaceFocus";
 
 const threadA: ScopedThreadRef = {
   environmentId: EnvironmentId.make("environment"),
@@ -43,12 +44,14 @@ function Card({
   inline,
   fixture,
   rows = 1,
+  focusControls = false,
 }: {
   threadRef: ScopedThreadRef;
   inline: boolean;
   fixture: ReturnType<typeof setup>;
   /** Rows of 100px shown at full density. Compact always takes 50px. */
   rows?: number;
+  focusControls?: boolean;
 }) {
   return (
     // The web root renders in StrictMode, which re-runs ref callbacks on every mount.
@@ -73,9 +76,19 @@ function Card({
           contentKey={String(rows)}
         >
           {(density) => (
-            <p style={{ height: density === "full" ? rows * 100 : 50 }}>
-              Details for {threadRef.threadId}
-            </p>
+            <div style={{ height: density === "full" ? rows * 100 : 50 }}>
+              <span>Details for {threadRef.threadId}</span>
+              {focusControls ? (
+                <>
+                  <button>Environment</button>
+                  <button data-thread-launcher="cursor" disabled>
+                    Open Cursor
+                  </button>
+                  <button data-thread-launcher="vscode">Open VS Code</button>
+                  <button data-thread-launcher="gitgrove">Open GitGrove</button>
+                </>
+              ) : null}
+            </div>
           )}
         </ThreadDetailsCard>
       </ChatCanvasContext>
@@ -83,11 +96,22 @@ function Card({
   );
 }
 
-it("stays open once opened", async () => {
+it("stays open and honors requested launcher focus when the popover opens", async () => {
   using fixture = setup();
-  await using _screen = await render(<Card threadRef={threadB} inline={false} fixture={fixture} />);
-  await act(() => useRightPanelStore.getState().setThreadPanelOpen(threadB, "popover", true));
+  await using screen = await render(
+    <Card threadRef={threadB} inline={false} fixture={fixture} focusControls />,
+  );
+  using _focus = { [Symbol.dispose]: startWorkspaceFocus(screen.router!) };
+  await act(() => {
+    useRightPanelStore.getState().setThreadPanelOpen(threadB, "popover", true);
+    requestWorkspaceFocus({
+      area: "details",
+      selector: "button[data-thread-launcher]:not(:disabled)",
+      restore: false,
+    });
+  });
   await expect.element(page.getByText("Details for thread-b")).toBeVisible();
+  await expect.element(page.getByRole("button", { name: "Open VS Code" })).toHaveFocus();
   expect(popoverOpen(threadB)).toBe(true);
 });
 

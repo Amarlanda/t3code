@@ -1,6 +1,11 @@
+import { createElement, Fragment, useState } from "react";
 import { describe, expect, it, vi } from "vite-plus/test";
-import { userEvent } from "vite-plus/test/browser";
-import { installSidebarTree } from "./sidebarTree";
+import { page, userEvent } from "vite-plus/test/browser";
+import { render } from "../../test/render";
+import { Sidebar, SidebarProvider, useSidebar } from "../components/ui/sidebar";
+import { useStableCallback } from "../hooks/useStableCallback";
+import { attachSidebarTree, installSidebarTree } from "./sidebarTree";
+import { startWorkspaceFocus, workspaceAreaProps } from "./workspaceFocus";
 
 function setup() {
   const root = document.createElement("div");
@@ -35,6 +40,50 @@ function press(target: HTMLElement, key: string, init: KeyboardEventInit = {}) {
   return event;
 }
 
+function SidebarNavigationFixture() {
+  const { isMobile, setOpenMobile } = useSidebar();
+  const [expanded, setExpanded] = useState(false);
+  const leaveSidebar = useStableCallback(() => {
+    if (isMobile) setOpenMobile(false);
+  });
+  return createElement(
+    Fragment,
+    null,
+    createElement("button", { onClick: () => setOpenMobile(true) }, "Open sidebar"),
+    createElement(
+      Sidebar,
+      null,
+      createElement(
+        "div",
+        {
+          role: "tree",
+          ref: (node: HTMLDivElement | null) => attachSidebarTree(node, leaveSidebar),
+        },
+        createElement(
+          "button",
+          {
+            role: "treeitem",
+            "data-sidebar-row": "project",
+            "aria-expanded": expanded,
+            onClick: () => setExpanded(!expanded),
+          },
+          "Project",
+        ),
+      ),
+    ),
+    createElement(
+      "section",
+      workspaceAreaProps("conversation", 1, "Conversation"),
+      createElement("button", null, "Copy message"),
+    ),
+    createElement(
+      "section",
+      workspaceAreaProps("composer", 2, "Composer"),
+      createElement("textarea", { "aria-label": "Prompt" }),
+    ),
+  );
+}
+
 describe("sidebar keyboard navigation", () => {
   it("moves focus without activating rows, clamps at the ends, and keeps one Tab stop", () => {
     using tree = setup();
@@ -47,6 +96,14 @@ describe("sidebar keyboard navigation", () => {
     first.focus();
     press(first, "ArrowDown");
     expect(document.activeElement).toBe(second);
+    press(second, "k");
+    expect(document.activeElement).toBe(first);
+    press(first, "j");
+    expect(document.activeElement).toBe(second);
+    press(second, "ArrowUp");
+    expect(document.activeElement).toBe(first);
+    press(first, "ArrowDown");
+    expect(document.activeElement).toBe(second);
     press(second, "End");
     expect(document.activeElement).toBe(last);
     press(last, "ArrowDown");
@@ -57,7 +114,7 @@ describe("sidebar keyboard navigation", () => {
     expect(tree.root.querySelectorAll('[tabindex="0"]')).toHaveLength(1);
   });
 
-  it("expands a group before entering its first child and returns to the parent", async () => {
+  it.each(["{Enter}", " "])("toggles a group with %s and returns to its parent", async (key) => {
     using tree = setup();
     const group = tree.row("project");
     group.setAttribute("aria-expanded", "false");
@@ -69,7 +126,7 @@ describe("sidebar keyboard navigation", () => {
     });
     tree.install();
     group.focus();
-    press(group, "ArrowRight");
+    await userEvent.keyboard(key);
     expect(group.getAttribute("aria-expanded")).toBe("true");
     expect(document.activeElement).toBe(group);
     // The tree picks up the new child from its mutation observer.
@@ -78,16 +135,66 @@ describe("sidebar keyboard navigation", () => {
         tree.root.querySelector('[data-sidebar-parent="project"]')?.getAttribute("aria-level"),
       ).toBe("2"),
     );
-    press(group, "ArrowRight");
+    press(group, "ArrowDown");
     const child = document.activeElement as HTMLElement;
     expect(child.dataset.sidebarRow).toBe("thread");
     press(child, "ArrowLeft");
     expect(document.activeElement).toBe(group);
     press(group, "ArrowLeft");
     expect(group.getAttribute("aria-expanded")).toBe("false");
+    expect(press(group, "h").defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(group);
+    await userEvent.keyboard(key);
+    expect(group.getAttribute("aria-expanded")).toBe("true");
+    await userEvent.keyboard(key);
+    expect(group.getAttribute("aria-expanded")).toBe("false");
   });
 
-  it("opens the row menu on Shift+F10 release without moving focus", () => {
+  it.each([
+    { key: "l", width: 767 },
+    { key: "ArrowRight", width: 767 },
+    { key: "l", width: 768 },
+    { key: "ArrowRight", width: 768 },
+  ])(
+    "returns to the conversation in Normal mode with $key at width $width",
+    async ({ key, width }) => {
+      await page.viewport(width, 800);
+      await using screen = await render(
+        createElement(SidebarProvider, null, createElement(SidebarNavigationFixture)),
+      );
+      using _focus = { [Symbol.dispose]: startWorkspaceFocus(screen.router!) };
+      const conversation = screen.getByRole("region", { name: "Conversation" }).element();
+      const prompt = screen.getByRole("textbox", { name: "Prompt" });
+      await userEvent.click(screen.getByRole("button", { name: "Copy message" }));
+      await userEvent.click(prompt);
+      if (width < 768) {
+        await userEvent.click(screen.getByRole("button", { name: "Open sidebar" }));
+        await expect.element(page.getByRole("dialog", { name: "Sidebar" })).toBeVisible();
+      }
+      const group = page.getByRole("treeitem", { name: "Project" }).element() as HTMLElement;
+      group.focus();
+      for (const modifiers of [
+        { ctrlKey: true },
+        { altKey: true },
+        { metaKey: true },
+        { shiftKey: true },
+        { isComposing: true },
+        { keyCode: 229 },
+      ]) {
+        expect(press(group, key, modifiers).defaultPrevented).toBe(false);
+        expect(document.activeElement).toBe(group);
+      }
+      expect(press(group, key).defaultPrevented).toBe(true);
+      await vi.waitFor(() => expect(document.activeElement).toBe(conversation));
+      expect(group.getAttribute("aria-expanded")).toBe("false");
+      await expect.element(prompt).toHaveValue("");
+      if (width < 768)
+        await expect.element(page.getByRole("dialog", { name: "Sidebar" })).not.toBeInTheDocument();
+      else await expect.element(page.getByRole("treeitem", { name: "Project" })).toBeVisible();
+    },
+  );
+
+  it.each(["m", "ContextMenu"])("opens the row menu on %s release without moving focus", (key) => {
     using tree = setup();
     tree.row("first");
     const selected = tree.row("selected");
@@ -95,11 +202,26 @@ describe("sidebar keyboard navigation", () => {
     selected.addEventListener("contextmenu", contextMenu);
     tree.install();
     selected.focus();
-    expect(press(selected, "F10", { shiftKey: true }).defaultPrevented).toBe(true);
-    expect(contextMenu).not.toHaveBeenCalled();
+    for (const modifiers of [
+      { ctrlKey: true },
+      { altKey: true },
+      { metaKey: true },
+      { shiftKey: true },
+      { isComposing: true },
+      { keyCode: 229 },
+    ]) {
+      expect(press(selected, "m", modifiers).defaultPrevented).toBe(false);
+      selected.dispatchEvent(new KeyboardEvent("keyup", { key: "m", bubbles: true }));
+      expect(contextMenu).not.toHaveBeenCalled();
+    }
+    expect(press(selected, "F10", { shiftKey: true }).defaultPrevented).toBe(false);
     selected.dispatchEvent(
-      new KeyboardEvent("keyup", { key: "F10", shiftKey: true, bubbles: true, cancelable: true }),
+      new KeyboardEvent("keyup", { key: "F10", shiftKey: true, bubbles: true }),
     );
+    expect(contextMenu).not.toHaveBeenCalled();
+    expect(press(selected, key).defaultPrevented).toBe(true);
+    expect(contextMenu).not.toHaveBeenCalled();
+    selected.dispatchEvent(new KeyboardEvent("keyup", { key, bubbles: true, cancelable: true }));
     expect(contextMenu).toHaveBeenCalledOnce();
     expect(document.activeElement).toBe(selected);
   });

@@ -266,6 +266,36 @@ describe("thread undo shortcut", () => {
 });
 
 describe("split/new/close terminal shortcuts", () => {
+  it("uses Command or Control for terminal controls without function keys or panel conflicts", () => {
+    for (const platform of ["Linux", "MacIntel", "Win32"]) {
+      for (const modifier of [{ metaKey: true }, { ctrlKey: true }]) {
+        for (const terminalFocus of [false, true]) {
+          const options = { platform, context: { terminalFocus, rightPanelOpen: true } };
+          assert.equal(
+            resolveShortcutCommand(
+              event({ key: "t", ...modifier }),
+              DEFAULT_RESOLVED_KEYBINDINGS,
+              options,
+            ),
+            "terminal.toggle",
+          );
+          assert.equal(
+            resolveShortcutCommand(
+              event({ key: "j", ...modifier }),
+              DEFAULT_RESOLVED_KEYBINDINGS,
+              options,
+            ),
+            "terminal.cycleLayout",
+          );
+        }
+      }
+      for (const key of ["F2", "F6", "F10"]) {
+        assert.isNull(
+          resolveShortcutCommand(event({ key }), DEFAULT_RESOLVED_KEYBINDINGS, { platform }),
+        );
+      }
+    }
+  });
   it("supports when expressions", () => {
     const keybindings = compile([
       {
@@ -327,7 +357,7 @@ describe("shortcutLabelForCommand", () => {
         platform: "Linux",
         context: { terminalFocus: false },
       }),
-      "Ctrl+D",
+      "⌘D",
     );
     assert.isNull(
       shortcutLabelForCommand(bindings, "diff.toggle", {
@@ -340,7 +370,7 @@ describe("shortcutLabelForCommand", () => {
         platform: "Linux",
         context: { terminalFocus: true },
       }),
-      "Ctrl+D",
+      "⌘D",
     );
   });
 });

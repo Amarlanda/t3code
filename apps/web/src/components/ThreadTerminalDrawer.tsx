@@ -18,6 +18,10 @@ import {
   SquareSplitVertical,
   TerminalSquare,
   Trash2,
+  PanelBottom,
+  PanelRight,
+  Maximize2,
+  X,
 } from "lucide-react";
 import {
   AuthPreviewOperateScope,
@@ -30,6 +34,7 @@ import {
   type ThreadId,
 } from "@t3tools/contracts";
 import { getTerminalLabel } from "@t3tools/shared/terminalLabels";
+import type { TerminalLayout } from "../terminalUiStateStore";
 import * as Schema from "effect/Schema";
 import {
   type PointerEvent as ReactPointerEvent,
@@ -67,6 +72,8 @@ import {
   isTerminalSplitShortcut,
   isTerminalSplitVerticalShortcut,
   isTerminalToggleShortcut,
+  resolveShortcutCommand,
+  shortcutLabelForCommand,
   terminalDeleteShortcutData,
   terminalNavigationShortcutData,
 } from "../keybindings";
@@ -944,6 +951,7 @@ function TerminalSessionViewport({
         }
         if (
           isTerminalToggleShortcut(event, currentKeybindings, options) ||
+          resolveShortcutCommand(event, currentKeybindings, options) === "terminal.cycleLayout" ||
           isTerminalSplitShortcut(event, currentKeybindings, options) ||
           isTerminalSplitVerticalShortcut(event, currentKeybindings, options) ||
           isTerminalNewShortcut(event, currentKeybindings, options) ||
@@ -1157,6 +1165,9 @@ function TerminalSessionViewport({
 
 interface ThreadTerminalDrawerProps {
   mode?: "drawer" | "panel";
+  layout?: TerminalLayout;
+  onLayoutChange?: (layout: TerminalLayout) => void;
+  onHide?: () => void;
   threadRef: ScopedThreadRef;
   threadId: ThreadId;
   cwd: string;
@@ -1192,6 +1203,7 @@ interface TerminalActionButtonProps {
   onClick: () => void;
   children: ReactNode;
   disabled?: boolean;
+  pressed?: boolean;
 }
 
 function TerminalActionButton({
@@ -1200,6 +1212,7 @@ function TerminalActionButton({
   onClick,
   children,
   disabled,
+  pressed,
 }: TerminalActionButtonProps) {
   return (
     <Popover>
@@ -1212,6 +1225,7 @@ function TerminalActionButton({
             onClick={disabled ? undefined : onClick}
             aria-label={label}
             aria-disabled={disabled}
+            aria-pressed={pressed}
           />
         }
       >
@@ -1414,6 +1428,9 @@ function TerminalSidebarGroup({
 
 export default function ThreadTerminalDrawer({
   mode = "drawer",
+  layout = "bottom",
+  onLayoutChange,
+  onHide,
   threadRef,
   threadId,
   cwd,
@@ -1444,6 +1461,7 @@ export default function ThreadTerminalDrawer({
   const canOperateTerminal = useEnvironmentScope(threadRef.environmentId, AuthTerminalOperateScope);
   const terminalArea = workspaceAreaProps("terminal", 5, "Terminal");
   const isPanel = mode === "panel";
+  const fillsHeight = isPanel || layout !== "bottom";
   const [advancedTypography] = useLocalStorage(
     TYPOGRAPHY_ADVANCED_STORAGE_KEY,
     false,
@@ -1452,7 +1470,11 @@ export default function ThreadTerminalDrawer({
   const drawerRef = useRef<HTMLElement | null>(null);
   const [drawerLayout, setDrawerLayout] = useState(() => readDrawerLayout(null));
   const maxDrawerHeight = resolveTerminalDrawerMaxHeight({ ...drawerLayout, composerHeight });
-  const drawerHeight = clampDrawerHeight(height, maxDrawerHeight);
+  const halfHeight =
+    ((drawerLayout.chatColumnHeight ?? drawerLayout.viewportHeight) -
+      (drawerLayout.headerHeight ?? 0)) /
+    2;
+  const drawerHeight = clampDrawerHeight(height > 0 ? height : halfHeight, maxDrawerHeight);
   // A drag only writes the drawer's style; the store hears the height once, at
   // pointerup. The custom property outranks the rendered height while it is set.
   const resizeStateRef = useRef<{
@@ -1609,6 +1631,45 @@ export default function ThreadTerminalDrawer({
   const closeTerminalActionLabel = closeShortcutLabel
     ? `Close Terminal (${closeShortcutLabel})`
     : "Close Terminal";
+  const toggleShortcutLabel = shortcutLabelForCommand(keybindings, "terminal.toggle");
+  const layoutControls =
+    !isPanel && onLayoutChange ? (
+      <div
+        className="flex h-8 shrink-0 items-center justify-between gap-2 border-b border-border/70 px-2"
+        role="group"
+        aria-label="Terminal layout"
+      >
+        <span className="truncate text-xs text-muted-foreground">Terminal</span>
+        <div className="flex items-center gap-1">
+          {(
+            [
+              ["bottom", "Bottom half", PanelBottom],
+              ["side", "Side by side", PanelRight],
+              ["full", "Full workspace", Maximize2],
+            ] as const
+          ).map(([value, label, Icon]) => (
+            <TerminalActionButton
+              key={value}
+              className="rounded p-1 text-muted-foreground hover:bg-accent aria-pressed:bg-accent aria-pressed:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+              label={`Terminal layout: ${label}`}
+              pressed={layout === value}
+              onClick={() => onLayoutChange(value)}
+            >
+              <Icon className="size-3.5" />
+            </TerminalActionButton>
+          ))}
+          {onHide && (
+            <TerminalActionButton
+              className="rounded p-1 text-muted-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
+              label={`Hide terminal${toggleShortcutLabel ? ` (${toggleShortcutLabel})` : ""}`}
+              onClick={onHide}
+            >
+              <X className="size-3.5" />
+            </TerminalActionButton>
+          )}
+        </div>
+      </div>
+    ) : null;
   const onSplitTerminalAction = () => {
     if (!canOperateTerminal || hasReachedSplitLimit) return;
     onSplitTerminal();
@@ -1732,11 +1793,13 @@ export default function ThreadTerminalDrawer({
         data-terminal-owner={isPanel ? "right-panel" : "drawer"}
         className={cn(
           "relative flex min-w-0 flex-col overflow-hidden bg-background",
-          isPanel ? "h-full flex-1" : "z-45 shrink-0 border-t border-border/80",
+          fillsHeight ? "h-full flex-1" : "z-45 shrink-0 border-t border-border/80",
         )}
-        style={isPanel ? undefined : { height: `var(${DRAG_HEIGHT_PROPERTY}, ${drawerHeight}px)` }}
+        style={
+          fillsHeight ? undefined : { height: `var(${DRAG_HEIGHT_PROPERTY}, ${drawerHeight}px)` }
+        }
       >
-        {!isPanel ? (
+        {!fillsHeight ? (
           <div
             className="absolute inset-x-0 top-0 z-20 h-1.5 cursor-row-resize"
             onPointerDown={handleResizePointerDown}
@@ -1746,6 +1809,7 @@ export default function ThreadTerminalDrawer({
             onLostPointerCapture={handleResizePointerEnd}
           />
         ) : null}
+        {layoutControls}
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-4 py-6 text-center text-sm text-muted-foreground">
           <p>No terminal sessions for this thread yet.</p>
           <Button
@@ -1769,11 +1833,13 @@ export default function ThreadTerminalDrawer({
       data-terminal-owner={isPanel ? "right-panel" : "drawer"}
       className={cn(
         "relative flex min-w-0 flex-col overflow-hidden bg-background",
-        isPanel ? "h-full flex-1" : "z-45 shrink-0 border-t border-border/80",
+        fillsHeight ? "h-full flex-1" : "z-45 shrink-0 border-t border-border/80",
       )}
-      style={isPanel ? undefined : { height: `var(${DRAG_HEIGHT_PROPERTY}, ${drawerHeight}px)` }}
+      style={
+        fillsHeight ? undefined : { height: `var(${DRAG_HEIGHT_PROPERTY}, ${drawerHeight}px)` }
+      }
     >
-      {!isPanel ? (
+      {!fillsHeight ? (
         <div
           className="absolute inset-x-0 top-0 z-20 h-1.5 cursor-row-resize"
           onPointerDown={handleResizePointerDown}
@@ -1783,9 +1849,15 @@ export default function ThreadTerminalDrawer({
           onLostPointerCapture={handleResizePointerEnd}
         />
       ) : null}
+      {layoutControls}
 
       {!hasTerminalSidebar && (
-        <div className="pointer-events-none absolute right-2 top-2 z-20">
+        <div
+          className={cn(
+            "pointer-events-none absolute right-2 z-20",
+            layoutControls ? "top-10" : "top-2",
+          )}
+        >
           <div className="pointer-events-auto inline-flex items-center overflow-hidden rounded-md border border-border/80 bg-background shadow-xs">
             <TerminalActionButton
               disabled={!canOperateTerminal}

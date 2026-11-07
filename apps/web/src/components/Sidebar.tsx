@@ -1647,9 +1647,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     };
   };
 
+  const leaveSidebar = useStableCallback(() => {
+    if (isMobile) setOpenMobile(false);
+  });
   const attachTreeRef = (node: HTMLUListElement) => {
     const detachMotion = attachListMotionRef(node);
-    const detachTree = attachSidebarTree(node);
+    const detachTree = attachSidebarTree(node, leaveSidebar);
     return () => {
       detachTree?.();
       detachMotion();
@@ -2998,10 +3001,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                           toggleProjectScopeKey(project.projectKey);
                           return;
                         }
-                        if (
-                          event.key !== "ContextMenu" &&
-                          !(event.shiftKey && event.key === "F10")
-                        ) {
+                        if (event.key !== "ContextMenu") {
                           return;
                         }
                         if (project) handleProjectSettings(event, project);

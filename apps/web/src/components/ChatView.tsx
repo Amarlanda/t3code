@@ -732,6 +732,9 @@ export default function ChatView(props: ChatViewProps) {
   const terminalUiState = useTerminalUiStateStore((state) =>
     selectThreadTerminalUiState(state.terminalUiStateByThreadKey, routeThreadRef),
   );
+  const terminalLayout = terminalUiState.terminalLayout ?? "bottom";
+  const terminalSideBySide = terminalUiState.terminalOpen && terminalLayout === "side";
+  const terminalFullWorkspace = terminalUiState.terminalOpen && terminalLayout === "full";
 
   const fallbackDraftProjectRef = draftThread
     ? scopeProjectRef(draftThread.environmentId, draftThread.projectId)
@@ -3194,28 +3197,34 @@ export default function ChatView(props: ChatViewProps) {
   const content = (
     <div
       ref={setWorkspaceLayoutElement}
-      className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background"
+      className={cn(
+        "relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background",
+        terminalFullWorkspace && "[&>[data-preview-panel-mode=inline]]:hidden",
+      )}
     >
       <DeviceSetupDialogHost
         threadKey={activeThreadKey}
         threadRef={activeThreadRef}
         state={deviceState}
       />
-      {rightPanelControlsAtRoot ? panelLayoutControls : null}
+      {rightPanelControlsAtRoot && !terminalFullWorkspace ? panelLayoutControls : null}
       <div
         className={cn(
-          "flex min-h-0 min-w-0 flex-col overflow-x-hidden",
-          rightPanelMaximized ? "w-0 flex-none" : "flex-1",
+          "min-h-0 min-w-0 overflow-x-hidden",
+          terminalSideBySide ? "grid grid-cols-2 grid-rows-[auto_minmax(0,1fr)]" : "flex flex-col",
+          rightPanelMaximized && !terminalFullWorkspace ? "w-0 flex-none" : "flex-1",
         )}
-        data-chat-column-maximized-away={rightPanelMaximized ? "true" : "false"}
+        data-chat-column-maximized-away={
+          rightPanelMaximized && !terminalFullWorkspace ? "true" : "false"
+        }
         data-chat-column
-        inert={rightPanelMaximized}
+        inert={rightPanelMaximized && !terminalFullWorkspace}
       >
         <header
           ref={threadPanelPopoverAnchorRef}
           data-chat-header
           className={cn(
-            "relative bg-background [[data-panel-animations=true]_&]:motion-safe:transition-[padding-left] [[data-panel-animations=true]_&]:motion-safe:duration-(--panel-animation-duration) [[data-panel-animations=true]_&]:motion-safe:ease-out",
+            "relative col-span-full bg-background [[data-panel-animations=true]_&]:motion-safe:transition-[padding-left] [[data-panel-animations=true]_&]:motion-safe:duration-(--panel-animation-duration) [[data-panel-animations=true]_&]:motion-safe:ease-out",
             isElectron
               ? cn(
                   "drag-region flex h-[var(--workspace-topbar-height)] min-h-[var(--workspace-topbar-height)] shrink-0 items-center px-3 sm:px-5",
@@ -3253,7 +3262,14 @@ export default function ChatView(props: ChatViewProps) {
           />
         </header>
 
-        <div className="relative flex min-h-0 min-w-0 flex-1">
+        <div
+          className={cn(
+            "relative min-h-0 min-w-0 flex-1",
+            terminalFullWorkspace ? "hidden" : "flex",
+            terminalSideBySide && "col-start-1 row-start-2",
+          )}
+          inert={terminalFullWorkspace}
+        >
           <ThreadFindCanvas
             findOptions={{
               skills: timelineSkills,
@@ -3824,7 +3840,7 @@ export default function ChatView(props: ChatViewProps) {
           widthStorageKey={`t3code:preview-panel-width:${activeThreadKey}`}
           sheetAnimationDurationMs={panelAnimationsActive ? panelAnimationDurationMs : 0}
           onCloseSheet={closePreviewPanelStable}
-          open={rightPanelOpen}
+          open={rightPanelOpen && !terminalFullWorkspace}
           keybindings={keybindings}
           getShortcutContext={getShortcutContextStable}
           maximized={rightPanelMaximized}

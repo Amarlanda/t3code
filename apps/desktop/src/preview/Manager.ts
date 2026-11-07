@@ -20,6 +20,7 @@ import type {
   PreviewForwardedShortcut,
 } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
+import { handleCommandMenuInput } from "../electron/ElectronMenu.ts";
 import { matchesKeybindingShortcut } from "@t3tools/shared/keybindings";
 import { normalizePreviewUrl } from "@t3tools/shared/preview";
 import {
@@ -1432,11 +1433,13 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     const windowCreated = (window: Electron.BrowserWindow): void => {
       window.webContents.setIgnoreMenuShortcuts(true);
       window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
-      window.webContents.on("before-input-event", (_event, input) => {
+      window.webContents.on("before-input-event", (event, input) => {
+        if (handleCommandMenuInput(event, input, hostPlatform, window.webContents)) return;
         syncMenuShortcuts(window.webContents, input);
       });
     };
     const beforeInput = (event: Electron.Event, input: Electron.Input): void => {
+      if (holdsKeyboardFocus(wc) && handleCommandMenuInput(event, input, hostPlatform, wc)) return;
       syncMenuShortcuts(wc, input);
       const host = wc.hostWebContents;
       const forwarded =

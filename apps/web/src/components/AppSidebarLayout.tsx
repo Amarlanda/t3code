@@ -177,7 +177,7 @@ export function registerNavigationHistoryCommands(router: AnyRouter): () => void
   );
 }
 
-// Capture phase, so F6 also leaves widgets that swallow keys, such as the terminal.
+// Capture phase, so focus commands also leave widgets that swallow keys, such as the terminal.
 function registerWorkspaceFocusCommands(router: AnyRouter): () => void {
   const move = (direction: 1 | -1) => (event: KeyboardEvent) => {
     if (event.isComposing) return false;
@@ -416,6 +416,7 @@ function SidebarControl() {
 }
 
 export function AppSidebarLayout({ children }: { children: ReactNode }) {
+  const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const sidebarArea = workspaceAreaProps("sidebar", 0, "Threads");
   const [sidebarRouteReveal] = useState<SidebarRouteReveal>(() => ({
     observedKey: null,
@@ -489,7 +490,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
         {children}
         <BackgroundThreadAnnouncer />
         <SidebarControl />
-        <VimModeBar />
+        <VimModeBar keybindings={keybindings} />
         {isElectron ? <HistorySwipeNavigation /> : null}
       </SidebarProvider>
     </PanelAnimationSuppressionProvider>

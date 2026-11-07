@@ -10,6 +10,7 @@ import {
   deleteSelectedThreadEntries,
   getFallbackThreadIdAfterDelete,
   hasUnseenCompletion,
+  isSidebarRenameShortcut,
   resolveSidebarRowThreadId,
   orderItemsByPreferredIds,
   pinOrderKeyBetween,
@@ -1446,4 +1447,32 @@ describe("resolveSidebarFolderDot", () => {
     expect(resolveSidebarFolderDot([working, unread])).toBe("unread");
     expect(resolveSidebarFolderDot([unread, limited])).toBe("attention");
   });
+});
+
+it("renames only on unmodified lowercase r outside composition", () => {
+  const event = {
+    key: "r",
+    defaultPrevented: false,
+    isComposing: false,
+    keyCode: 82,
+    ctrlKey: false,
+    altKey: false,
+    metaKey: false,
+    shiftKey: false,
+  };
+  expect(isSidebarRenameShortcut(event)).toBe(true);
+  for (const change of [
+    { key: "F2" },
+    { key: "R" },
+    { key: "m" },
+    { key: "Enter" },
+    { ctrlKey: true },
+    { altKey: true },
+    { metaKey: true },
+    { shiftKey: true },
+    { isComposing: true },
+    { keyCode: 229 },
+    { defaultPrevented: true },
+  ])
+    expect(isSidebarRenameShortcut({ ...event, ...change })).toBe(false);
 });

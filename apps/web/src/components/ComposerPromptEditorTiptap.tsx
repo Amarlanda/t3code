@@ -1080,6 +1080,7 @@ function ComposerPromptEditorTiptapInner(
     "data-testid": "composer-editor",
     "data-composer-rich-text": richText ? "true" : "false",
     role: "textbox",
+    spellcheck: "true",
     "aria-multiline": "true",
     ...(ariaLabel ? { "aria-label": ariaLabel } : {}),
     ...(disabled ? { "aria-readonly": "true" } : {}),
@@ -1302,11 +1303,23 @@ function ComposerPromptEditorTiptapInner(
               view.dispatch(tr.scrollIntoView());
             });
           }
-          if (!handler) return false;
-          const handled = handler(event.key, event);
+          const handled = handler?.(event.key, event) ?? false;
           if (handled) {
             event.preventDefault();
             event.stopPropagation();
+          } else if (
+            event.key === "Escape" &&
+            !event.isComposing &&
+            event.keyCode !== 229 &&
+            !event.ctrlKey &&
+            !event.metaKey &&
+            !event.altKey
+          ) {
+            // ProseMirror consumes unhandled Escape before document listeners see it.
+            event.preventDefault();
+            event.stopPropagation();
+            view.dom.blur();
+            return true;
           }
           return handled;
         },

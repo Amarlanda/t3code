@@ -20,6 +20,7 @@ const TYPE_TO_FOCUS_INTERACTIVE_SELECTOR = [
   '[role="radio"]',
   '[role="switch"]',
   '[role="tab"]',
+  '[role="treeitem"]',
 ].join(",");
 // Closed popups can stay mounted; match only open or closing layers.
 export const TYPE_TO_FOCUS_FLOATING_LAYER_SELECTOR = [
@@ -61,6 +62,12 @@ function isSurfaceLauncherKey(event: KeyboardEvent): boolean {
 
 export function shouldRedirectInputToComposer(event: Event): boolean {
   if (event.defaultPrevented) return false;
+  if (
+    event.target === document.body ||
+    (event.target instanceof Element &&
+      event.target.closest('[data-workspace-area="conversation"]'))
+  )
+    return false;
   // Never persist or send secret-request typing through the composer.
   if (eventPathContainsSelector(event, SECRET_REQUEST_SELECTOR)) return false;
   if (eventPathContainsSelector(event, TYPE_TO_FOCUS_EDITABLE_SELECTOR)) return false;

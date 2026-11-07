@@ -8,7 +8,7 @@ const FOCUS_BOUNDARY_SELECTOR =
 const FOCUSABLE_SELECTOR =
   'button:not(:disabled), a[href], input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [contenteditable="true"], [tabindex]';
 
-/** Props that make an element one stop in the F6 cycle; `order` sets its place in the cycle. */
+/** Props that make an element one stop in the workspace focus cycle; `order` sets its place in the cycle. */
 export function workspaceAreaProps(name: string, order: number, label: string) {
   return {
     "data-workspace-area": name,
@@ -283,6 +283,8 @@ export function createWorkspaceFocusController(doc: Document) {
     });
   };
   const request = (target: WorkspaceFocusTarget) => {
+    // Popup autofocus must not replace an explicit request for one of its controls.
+    if (pending?.area === target.area && pending.selector && !target.selector) return;
     cancelRequest();
     pending = target;
     // The key or click that made the request may still be propagating.
@@ -326,7 +328,7 @@ let focusRequestVersion = 0;
 export const getWorkspaceFocusRequestVersion = () => focusRequestVersion;
 
 /**
- * Starts workspace focus for the app: F6 area moves, focus requests, focus-loss recovery,
+ * Starts workspace focus for the app: area moves, focus requests, focus-loss recovery,
  * focus into a panel the user opens, and focus into the Pull Requests page on entry.
  */
 export function startWorkspaceFocus(router: AnyRouter): () => void {

@@ -132,6 +132,7 @@ export function useChatTerminalActions(input: ChatTerminalActionsInput) {
   const addTerminalContextToDraftStable = useStableCallback(addTerminalContextToDraft);
   const setTerminalOpen = (open: boolean) => {
     if (!activeThreadRef) return;
+    if (open) useRightPanelStore.getState().setMaximized(activeThreadRef, false);
     storeSetTerminalOpen(activeThreadRef, open);
     focusActiveDrawerTerminal(activeThreadRef);
   };
@@ -145,6 +146,7 @@ export function useChatTerminalActions(input: ChatTerminalActionsInput) {
       !hasTerminalWriteAccess()
     )
       return;
+    if (nextOpen) useRightPanelStore.getState().setMaximized(activeThreadRef, false);
     if (nextOpen && hasTerminalWriteAccess() && terminalUiState.terminalIds.length === 0) {
       // Server-created setup terminals exist before this client's drawer mounts.
       // Reuse them before allocating a shell from the still-empty UI state.
@@ -410,6 +412,22 @@ export function useChatTerminalActions(input: ChatTerminalActionsInput) {
       )
         return false;
       toggleTerminalVisibility();
+    },
+    "terminal.cycleLayout": ({ event }) => {
+      if (event.repeat) return;
+      if (
+        !activeThreadRef ||
+        (!readEnvironmentScope(environmentId, AuthTerminalReadScope) && !hasTerminalWriteAccess())
+      )
+        return false;
+      useRightPanelStore.getState().setMaximized(activeThreadRef, false);
+      if (!terminalUiState.terminalOpen) {
+        useTerminalUiStateStore.getState().setTerminalLayout(activeThreadRef, "bottom");
+        toggleTerminalVisibility();
+      } else {
+        useTerminalUiStateStore.getState().cycleTerminalLayout(activeThreadRef);
+        focusActiveDrawerTerminal(activeThreadRef);
+      }
     },
     "terminal.split": ({ terminalFocusOwner }) => {
       if (!hasTerminalWriteAccess()) return false;

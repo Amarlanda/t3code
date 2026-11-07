@@ -221,7 +221,7 @@ export function formatShortcutLabel(
   platform = navigator.platform,
 ): string {
   const keyLabel = formatShortcutKeyLabel(shortcut.key);
-  const useMetaForMod = isMacPlatform(platform);
+  const useMetaForMod = isMacPlatform(platform) || /linux/i.test(platform);
   const showMeta = shortcut.metaKey || (shortcut.modKey && useMetaForMod);
   const showCtrl = shortcut.ctrlKey || (shortcut.modKey && !useMetaForMod);
   const showAlt = shortcut.altKey;
