@@ -36,7 +36,7 @@ export function DesktopUVoiceCoordinator() {
         }
         const matches = readThreadShells().filter((candidate) =>
           request.action === "open" && request.conversationId
-            ? candidate.activeProviderThreadId === request.conversationId
+            ? (candidate.nativeConversationIds ?? []).includes(request.conversationId)
             : candidate.id === request.threadId &&
               candidate.environmentId === request.environmentId,
         );
