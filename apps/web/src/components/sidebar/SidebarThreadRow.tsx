@@ -1,3 +1,4 @@
+import { getPinnedThreadColorHex, usePinnedThreadColors } from "~/pinnedThreadColors";
 import { ThreadHoverCard, ThreadHoverCardPopup } from "../ThreadHoverCard";
 import { ThreadTerminalStatusButton } from "../ThreadStatusIndicators";
 import { discardComposerDraft } from "../../lib/discardComposerDraft";
@@ -655,6 +656,14 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   } = props;
   const threadRef = scopeThreadRef(thread.environmentId, thread.id);
   const threadKey = scopedThreadKey(threadRef);
+  const pinColor = usePinnedThreadColors((state) => state.colorByThreadKey[threadKey] ?? "blue");
+  const pinHex = getPinnedThreadColorHex(pinColor);
+  // Tint sits over the existing selected/hover background without changing text or focus rings.
+  const pinSurfaceStyle = props.isPinned
+    ? {
+        backgroundImage: `linear-gradient(90deg, ${pinHex} 0 3px, ${pinHex}1a 3px 100%)`,
+      }
+    : undefined;
   const canOperateThread = useEnvironmentScope(thread.environmentId, AuthOrchestrationOperateScope);
   const { leaseLiveStatus, rowRef: leaseRowRef } = useSidebarRowSubscriptionLease(props.isActive);
   const { revealRef } = props;
@@ -1216,6 +1225,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                 aria-label={accessibility.label}
                 aria-current={accessibility.current}
                 data-testid={inFolder ? "sidebar-row-folder" : "sidebar-row-slim"}
+                style={pinSurfaceStyle}
                 aria-busy={isRegeneratingTitle || undefined}
                 className={cn(
                   rowSurfaceClassName,
@@ -1404,6 +1414,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
               aria-label={accessibility.label}
               aria-current={accessibility.current}
               data-testid="sidebar-row-card"
+              style={pinSurfaceStyle}
               aria-busy={isRegeneratingTitle || undefined}
               className={rowSurfaceClassName}
               onClick={handleClick}

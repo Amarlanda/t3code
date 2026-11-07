@@ -9,6 +9,7 @@ export type ThreadActionMenuId =
   | "project-settings"
   | "pin"
   | "unpin"
+  | "pin-color"
   | "settle"
   | "unsettle"
   | "auto-settle"
@@ -101,6 +102,7 @@ export interface ThreadActionMenuState {
 export function threadActionRequiresOperate(action: ThreadActionMenuId): boolean {
   return ![
     "find",
+    "pin-color",
     "new-thread-on-branch",
     "project-settings",
     "mark-unread",
@@ -135,6 +137,9 @@ export function buildThreadActionMenuItems(
             ? { id: "unpin" as const, label: "Unpin thread", icon: "pin-off" }
             : { id: "pin" as const, label: "Pin thread", icon: "pin" },
         ]
+      : []),
+    ...(state.isPinned
+      ? [{ id: "pin-color" as const, label: "Change pin colour", icon: "palette" }]
       : []),
     ...(state.supports.settlement
       ? [
