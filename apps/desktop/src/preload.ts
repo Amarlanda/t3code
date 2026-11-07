@@ -1,5 +1,6 @@
 import type {
   DesktopBridge,
+  DesktopUVoiceRequest,
   DesktopPreviewOpenLinkEvent,
   DesktopPreviewPointerEvent,
   DesktopPreviewRecordingInputEvent,
@@ -73,6 +74,17 @@ function unwrapEnsureSshEnvironmentResult(result: unknown) {
 }
 
 contextBridge.exposeInMainWorld("desktopBridge", {
+  uvoice: {
+    speak: (input) => ipcRenderer.invoke(IpcChannels.UVOICE_SPEAK_CHANNEL, input),
+    setReady: (ready) => ipcRenderer.invoke(IpcChannels.UVOICE_READY_CHANNEL, ready),
+    complete: (response) => ipcRenderer.invoke(IpcChannels.UVOICE_COMPLETE_CHANNEL, response),
+    onRequest: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, request: DesktopUVoiceRequest) =>
+        listener(request);
+      ipcRenderer.on(IpcChannels.UVOICE_REQUEST_CHANNEL, handler);
+      return () => ipcRenderer.removeListener(IpcChannels.UVOICE_REQUEST_CHANNEL, handler);
+    },
+  },
   getAppBranding: () => {
     const result = ipcRenderer.sendSync(IpcChannels.GET_APP_BRANDING_CHANNEL);
     if (typeof result !== "object" || result === null) {
