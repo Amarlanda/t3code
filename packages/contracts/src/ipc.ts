@@ -1011,7 +1011,46 @@ export const DesktopPreviewRecordingSaveInputSchema = Schema.Struct({
 export const SystemSettingsPaneSchema = Schema.Literals(["full-disk-access"]);
 export type SystemSettingsPane = typeof SystemSettingsPaneSchema.Type;
 
+export const DesktopUVoiceRequest = Schema.Struct({
+  action: Schema.Literals(["target", "send", "open"]),
+  requestId: TrimmedNonEmptyString,
+  threadId: Schema.optionalKey(TrimmedNonEmptyString),
+  environmentId: Schema.optionalKey(TrimmedNonEmptyString),
+  conversationId: Schema.optionalKey(TrimmedNonEmptyString),
+  text: Schema.optionalKey(Schema.String),
+});
+export type DesktopUVoiceRequest = typeof DesktopUVoiceRequest.Type;
+
+export const DesktopUVoiceResponse = Schema.Struct({
+  ok: Schema.Boolean,
+  conversationId: Schema.optionalKey(TrimmedNonEmptyString),
+  requestId: TrimmedNonEmptyString,
+  threadId: Schema.optionalKey(TrimmedNonEmptyString),
+  environmentId: Schema.optionalKey(TrimmedNonEmptyString),
+  label: Schema.optionalKey(Schema.String),
+  accepted: Schema.optionalKey(Schema.Boolean),
+  error: Schema.optionalKey(Schema.String),
+});
+export type DesktopUVoiceResponse = typeof DesktopUVoiceResponse.Type;
+
+export const DesktopUVoiceSpeechContext = Schema.Struct({
+  t3_environment_id: TrimmedNonEmptyString,
+  t3_thread_id: TrimmedNonEmptyString,
+  t3_message_id: Schema.optionalKey(TrimmedNonEmptyString),
+});
+export type DesktopUVoiceSpeechContext = typeof DesktopUVoiceSpeechContext.Type;
+
 export interface DesktopBridge {
+  uvoice: {
+    speak: (input: {
+      text: string;
+      source: string;
+      context?: DesktopUVoiceSpeechContext;
+    }) => Promise<void>;
+    setReady: (ready: boolean) => Promise<void>;
+    complete: (response: DesktopUVoiceResponse) => Promise<void>;
+    onRequest: (listener: (request: DesktopUVoiceRequest) => void) => () => void;
+  };
   getAppBranding: () => DesktopAppBranding | null;
   getRelayTelemetryEnabled: () => boolean;
   getPathForFile: (file: File) => string;

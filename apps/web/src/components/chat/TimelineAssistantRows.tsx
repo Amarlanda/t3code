@@ -1,3 +1,4 @@
+import { MessageUVoiceButton } from "./MessageUVoiceButton";
 import { shouldPreserveAssistantLineBreaks } from "@t3tools/shared/markdownPipeline";
 import { type RunId } from "@t3tools/contracts";
 import { canForkProjectedAssistantItem } from "@t3tools/client-runtime/state/thread-workflows";
@@ -184,6 +185,12 @@ function AssistantMessageMeta({
         message={message}
         showCopyButton={showCopyButton}
         streaming={copyStreaming}
+      />
+      <MessageUVoiceButton
+        threadRef={ctx.threadRef ?? null}
+        text={message.text}
+        messageId={message.id}
+        streaming={Boolean(message.streaming)}
       />
       {projectedItem?.item.type === "assistant_message" ? (
         <AssistantForkButton projectedItem={projectedItem} />
