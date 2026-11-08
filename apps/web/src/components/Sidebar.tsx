@@ -130,6 +130,7 @@ import { startNewThreadFromContext } from "../lib/chatThreadActions";
 import { useBoringSidebarEnabled, useClientSettings } from "../hooks/useSettings";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useLocalStorage } from "../hooks/useLocalStorage";
+import { Toggle, ToggleGroup } from "./ui/toggle-group";
 import { useNowMinute } from "../hooks/useNowMinute";
 import {
   useEnvironmentIdentities,
@@ -319,7 +320,15 @@ const SETTLED_TAIL_INITIAL_COUNT = 10;
 const SETTLED_TAIL_PAGE_COUNT = 25;
 const SETTLED_SHELF_EXPANDED_KEY = "t3code:sidebar:settled-expanded";
 const SNOOZED_SHELF_EXPANDED_KEY = "t3code:sidebar:snoozed-expanded";
-const WORKING_SHELF_EXPANDED_KEY = "t3code:sidebar:working-expanded";
+// New key: the shelf moved to the top and opens by default; older closed states do not carry over.
+const THREAD_SEARCH_SCOPE_KEY = "t3code:sidebar:search-scope";
+const ThreadSearchScopeSchema = Schema.Literals(["all", "titles", "messages"]);
+const THREAD_SEARCH_SCOPES = [
+  { value: "all", label: "All" },
+  { value: "titles", label: "Titles" },
+  { value: "messages", label: "Messages" },
+] as const;
+const WORKING_SHELF_EXPANDED_KEY = "t3code:sidebar:working-expanded:top";
 
 const inboxReturns = createInboxReturnTracker();
 
@@ -442,7 +451,7 @@ function useSidebarThreads(input: {
   );
   const [workingShelfExpanded, setWorkingShelfExpanded] = useLocalStorage(
     WORKING_SHELF_EXPANDED_KEY,
-    false,
+    true,
     Schema.Boolean,
   );
   // Shared with the old per-project sidebar, so folders keep their open state.
@@ -525,10 +534,10 @@ function useSidebarThreads(input: {
         });
   const orderedThreads = [
     ...pinnedThreads,
+    ...visibleWorkingThreads,
     ...(projectFolders === null
       ? activeThreads
       : projectFolders.flatMap((folder) => folder.threads)),
-    ...visibleWorkingThreads,
     ...visibleSnoozedThreads,
     ...renderedSettledThreads,
   ];
@@ -1001,6 +1010,11 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const [optimisticDrop, setOptimisticDrop] = useState<SidebarOptimisticDrop | null>(null);
   const threadSearchInputRef = useRef<HTMLInputElement>(null);
   const [threadSearchQuery, setThreadSearchQuery] = useState("");
+  const [threadSearchScope, setThreadSearchScope] = useLocalStorage(
+    THREAD_SEARCH_SCOPE_KEY,
+    "all",
+    ThreadSearchScopeSchema,
+  );
   const [searchHighlightKey, setSearchHighlightKey] = useState<string | null>(null);
   const searchEnvironmentIds = useConnectedEnvironmentIds();
   const queuePendingFileDrop = useSidebarPendingFileDropStore((s) => s.queuePendingFileDrop);
@@ -1147,7 +1161,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const scopedProjectKeys = revealWidensScope ? null : chosenScopeProjectKeys;
   const threadSearch = useThreadSearch(
     searchEnvironmentIds,
-    threadSearchQuery,
+    // Titles-only search never asks the server for message matches.
+    threadSearchScope === "titles" ? "" : threadSearchQuery,
     scopedProjectGroups.length === 0
       ? {}
       : { projectIds: scopedProjectRefs.map((projectRef) => projectRef.projectId) },
@@ -1329,7 +1344,13 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   );
   if (messageOrder !== shownMessageOrder) setShownMessageOrder(messageOrder);
   const { titleMatches: threadTitleResults, contentMatches: threadContentResults } =
-    searchSidebarThreads(searchableThreads, threadSearchQuery, new Set(messageOrder.keys));
+    searchSidebarThreads(
+      searchableThreads,
+      threadSearchQuery,
+      new Set(messageOrder.keys),
+      undefined,
+      threadSearchScope,
+    );
   const threadSearchResults = [...threadTitleResults, ...threadContentResults];
   // Only rows listed for their messages show one, and open find on it.
   const threadSearchMatchByKey = new Map(
@@ -1880,14 +1901,15 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     const items: SidebarListItem[] = [{ kind: "marker", marker: "pinned-header" }];
     const pinnedRows = rowsOf(pinnedThreads, "pinned");
     items.push(...pinnedRows);
-    items.push({ kind: "marker", marker: "pinned-divider" });
-    const activeRows = rowsOf(activeThreads, "active");
-    items.push({ kind: "marker", marker: "active-placeholder" });
-    items.push(...activeRows);
+    // Running threads sit right under Pinned so new work is visible at the top.
     if (workingThreads.length > 0) {
       items.push({ kind: "marker", marker: "working-header" });
       items.push(...rowsOf(visibleWorkingThreads, "working"));
     }
+    items.push({ kind: "marker", marker: "pinned-divider" });
+    const activeRows = rowsOf(activeThreads, "active");
+    items.push({ kind: "marker", marker: "active-placeholder" });
+    items.push(...activeRows);
     if (snoozedThreads.length > 0) {
       items.push({ kind: "marker", marker: "snoozed-header" });
       items.push(...rowsOf(visibleSnoozedThreads, "snoozed"));
@@ -3097,6 +3119,26 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       >
         <SidebarGroup className="flex-1" role="presentation">
           {isSearchingThreads ? (
+            <ToggleGroup
+              aria-label="Search in"
+              className="mx-2 mb-1"
+              value={[threadSearchScope]}
+              onValueChange={(next) => {
+                const value = next[0];
+                if (value === "all" || value === "titles" || value === "messages") {
+                  setThreadSearchScope(value);
+                  setSearchHighlightKey(null);
+                }
+              }}
+            >
+              {THREAD_SEARCH_SCOPES.map((scope) => (
+                <Toggle key={scope.value} value={scope.value}>
+                  {scope.label}
+                </Toggle>
+              ))}
+            </ToggleGroup>
+          ) : null}
+          {isSearchingThreads ? (
             threadSearchResults.length > 0 ? (
               <TooltipProvider
                 key="sidebar-thread-search-tooltips-150"
@@ -3402,7 +3444,6 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               <SidebarSectionHeader
                                 key="working-shelf-header"
                                 marker="working-header"
-                                className="mt-auto"
                                 label="Working"
                                 count={workingThreads.length}
                                 toggle={{
@@ -3417,7 +3458,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               <SidebarSectionHeader
                                 key="snoozed-shelf-header"
                                 marker="snoozed-header"
-                                className={cn(workingThreads.length === 0 && "mt-auto")}
+                                className="mt-auto"
                                 label="Snoozed"
                                 count={snoozedThreads.length}
                                 toggle={{
@@ -3432,9 +3473,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               <SidebarSectionHeader
                                 key="settled-shelf-header"
                                 marker="settled-header"
-                                className={cn(
-                                  workingThreads.length + snoozedThreads.length === 0 && "mt-auto",
-                                )}
+                                className={cn(snoozedThreads.length === 0 && "mt-auto")}
                                 label="Settled"
                                 count={settledCount}
                                 dragging={from !== null}

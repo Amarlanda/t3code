@@ -372,6 +372,12 @@ describe("searchSidebarThreads", () => {
         contentMatches: [threads[1]],
       },
     );
+    expect(
+      searchSidebarThreads(threads, "work", contentKeys("thread-1", "thread-2"), now, "titles"),
+    ).toEqual({ titleMatches: [threads[0], threads[2], threads[3]], contentMatches: [] });
+    expect(
+      searchSidebarThreads(threads, "work", contentKeys("thread-1", "thread-2"), now, "messages"),
+    ).toEqual({ titleMatches: [], contentMatches: [threads[0], threads[1]] });
   });
 });
 
@@ -1144,11 +1150,11 @@ describe("Working shelf (beta)", () => {
     const items: readonly SidebarListItem[] = [
       marker("pinned-header"),
       row("p1", "pinned"),
+      marker("working-header"),
+      row("w1", "working"),
       marker("pinned-divider"),
       row("a1", "active"),
       row("a2", "active"),
-      marker("working-header"),
-      row("w1", "working"),
       marker("settled-header"),
       row("s1", "settled"),
     ];

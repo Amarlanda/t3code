@@ -262,14 +262,10 @@ export function resolveSidebarDropTarget(
   for (const item of moved) {
     if (item.kind === "marker") {
       if (item.marker === "pinned-divider") currentSection = "active";
-      else if (
-        item.marker === "working-header" ||
-        item.marker === "snoozed-header" ||
-        item.marker === "settled-header"
-      )
-        break;
+      else if (item.marker === "working-header") currentSection = "working";
+      else if (item.marker === "snoozed-header" || item.marker === "settled-header") break;
     } else if (currentSection === "pinned") pinnedOrder.push(item.key);
-    else activeOrder.push(item.key);
+    else if (currentSection === "active") activeOrder.push(item.key);
   }
   return { section, pinnedOrder, activeOrder };
 }
@@ -1011,6 +1007,9 @@ const EMPTY_CONTENT_MATCH_KEYS: ReadonlySet<string> = new Set<string>();
  * the command palette ranks them, then threads listed only because their
  * messages match, in `contentMatchKeys` order.
  */
+/** What the sidebar search looks in: titles (with branch and PRs), message text, or both. */
+export type SidebarSearchScope = "all" | "titles" | "messages";
+
 export function searchSidebarThreads<
   T extends ThreadSearchShell & {
     readonly environmentId: EnvironmentId;
@@ -1021,15 +1020,20 @@ export function searchSidebarThreads<
   query: string,
   contentMatchKeys: ReadonlySet<string> = EMPTY_CONTENT_MATCH_KEYS,
   now = Date.now(),
+  scope: SidebarSearchScope = "all",
 ): { readonly titleMatches: T[]; readonly contentMatches: T[] } {
   const normalizedQuery = foldSearchQuery(query);
   if (normalizedQuery.length === 0) return { titleMatches: [], contentMatches: [] };
-  const titleMatches = rankSearchItems(threads, (thread, options) =>
-    scoreThreadSearch(normalizedQuery, threadSearchSubject(thread, null), now, {
-      ...options,
-      picks: false,
-    }),
-  ).map(({ item }) => item);
+  const titleMatches =
+    scope === "messages"
+      ? []
+      : rankSearchItems(threads, (thread, options) =>
+          scoreThreadSearch(normalizedQuery, threadSearchSubject(thread, null), now, {
+            ...options,
+            picks: false,
+          }),
+        ).map(({ item }) => item);
+  if (scope === "titles") return { titleMatches, contentMatches: [] };
   const listed = new Set(titleMatches);
   // In the order the server ranked their messages, as the palette lists them.
   const threadByKey = new Map(
