@@ -119,7 +119,12 @@ it.each([true, false])("leaves and re-enters the composer with rich text %s", as
   await expect.element(prompt).toHaveFocus();
   await expect.element(screen.getByText("-- INSERT --")).toBeVisible();
 
+  const helper = screen.getByRole("complementary", { name: "Shortcut helper" });
+  await expect.element(helper.getByText("Commands", { exact: true })).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "Expand shortcut helper" }));
+  await expect.element(helper.getByText("Commands", { exact: true })).toBeVisible();
   await userEvent.click(screen.getByRole("button", { name: "Collapse shortcut helper" }));
+  await expect.element(helper.getByText("Commands", { exact: true })).not.toBeInTheDocument();
   await userEvent.keyboard("i");
   await expect.element(prompt).toHaveFocus();
 
@@ -208,6 +213,7 @@ it("updates hints for editable and terminal focus and remapped bindings", async 
   await using screen = await render(fixture(keybindings));
   const helper = screen.getByRole("complementary", { name: "Shortcut helper" });
   const title = screen.getByRole("textbox", { name: "Thread title" });
+  await userEvent.click(helper.getByRole("button", { name: "Expand shortcut helper" }));
   await userEvent.click(title);
   await userEvent.keyboard("jk");
   await expect.element(title).toHaveValue("jk");

@@ -147,6 +147,7 @@ const {
   clipboardItemConstructor,
   createFromPath,
   fromId,
+  getApplicationMenu,
   getFocusedWebContents,
   mkdir,
   previewSession,
@@ -162,6 +163,7 @@ const {
     toPNG: () => Buffer.from("png"),
   })),
   fromId: vi.fn<(_id?: number) => Electron.WebContents | null>((_id?: number) => null),
+  getApplicationMenu: vi.fn<() => Electron.Menu | null>(() => null),
   getFocusedWebContents: vi.fn(() => null),
   mkdir: vi.fn((_path: string) => undefined),
   previewSession: { on: vi.fn() },
@@ -173,7 +175,9 @@ const {
 
 vi.mock("electron", () => ({
   app: { getPath: vi.fn() },
+  BaseWindow: { getFocusedWindow: () => null },
   BrowserWindow: browserWindowConstructor,
+  Menu: { getApplicationMenu },
   // oxlint-disable-next-line typescript/no-extraneous-class -- This constructor-only mock implements the browser ClipboardItem API.
   ClipboardItem: class {
     constructor(data: Record<string, unknown>) {
@@ -564,6 +568,7 @@ describe("PreviewManager", () => {
   beforeEach(() => {
     browserWindowConstructor.mockReset();
     fromId.mockClear();
+    getApplicationMenu.mockReset().mockReturnValue(null);
     getFocusedWebContents.mockReset();
     getFocusedWebContents.mockReturnValue(null);
     mkdir.mockClear();
@@ -719,13 +724,15 @@ describe("PreviewManager", () => {
   );
 
   effectIt.effect.each([
-    ["darwin", true, false, true],
-    ["darwin", false, true, false],
-    ["linux", false, true, true],
-    ["win32", true, false, false],
+    ["darwin", true, false, true, false],
+    ["darwin", false, true, false, false],
+    ["linux", false, true, true, false],
+    ["linux", true, false, false, true],
+    ["win32", true, false, false, true],
+    ["win32", true, true, false, false],
   ] as const)(
-    "reloads the preview only on the platform refresh chord: %s meta=%s ctrl=%s",
-    ([platform, meta, control, expected]) =>
+    "routes refresh to the preview or app menu: %s meta=%s ctrl=%s",
+    ([platform, meta, control, reloadPreview, reloadApp]) =>
       withManager(
         (manager) =>
           Effect.gen(function* () {
@@ -733,13 +740,18 @@ describe("PreviewManager", () => {
             fromId.mockReturnValue(preview.webContents);
             yield* manager.createTab("tab_refresh");
             yield* manager.registerWebview("tab_refresh", 42);
+            const reloadMainWindow = vi.fn();
+            getApplicationMenu.mockReturnValue({
+              items: [{ accelerator: "Super+R", enabled: true, click: reloadMainWindow }],
+            } as unknown as Electron.Menu);
             const preventDefault = vi.fn();
             preview.listeners.get("before-input-event")!(
               { preventDefault } as never,
               { type: "keyDown", key: "r", meta, control, shift: false, alt: false } as never,
             );
-            expect(preventDefault).toHaveBeenCalledTimes(expected ? 1 : 0);
-            expect(preview.reload).toHaveBeenCalledTimes(expected ? 1 : 0);
+            expect(preventDefault).toHaveBeenCalledTimes(reloadPreview || reloadApp ? 1 : 0);
+            expect(preview.reload).toHaveBeenCalledTimes(reloadPreview ? 1 : 0);
+            expect(reloadMainWindow).toHaveBeenCalledTimes(reloadApp ? 1 : 0);
           }),
         platform,
       ),

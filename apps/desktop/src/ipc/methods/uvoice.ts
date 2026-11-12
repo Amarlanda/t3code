@@ -30,6 +30,7 @@ const CACHE_LIMIT = 256;
 const decodeRequest = Schema.decodeUnknownSync(DesktopUVoiceRequest);
 export class UVoiceError extends Schema.TaggedError<UVoiceError>()("UVoiceError", {
   message: Schema.String,
+  cause: Schema.optionalKey(Schema.Defect()),
 }) {}
 
 const SpeakInput = Schema.Struct({
@@ -387,7 +388,13 @@ export const installUVoice = Effect.fn("desktop.ipc.installUVoice")(function* ()
         );
       }),
     ),
-    (close) => (close ? Effect.tryPromise(close).pipe(Effect.orDie) : Effect.void),
+    (close) =>
+      close
+        ? Effect.tryPromise({
+            try: close,
+            catch: (cause) => new UVoiceError({ message: "UVoice socket shutdown failed.", cause }),
+          }).pipe(Effect.orDie)
+        : Effect.void,
   );
   if (!startupFailure) yield* Effect.logInfo("UVoice local bridge listening");
 });

@@ -14,6 +14,17 @@ import { threadEnvironment } from "../../state/threads";
 import { useOrchestrationCommand } from "../../state/use-orchestration-command";
 import { toastManager } from "../ui/toast";
 
+function failedUVoiceResponse(
+  request: DesktopUVoiceRequest,
+  error: unknown,
+): DesktopUVoiceResponse {
+  return {
+    ok: false,
+    requestId: request.requestId,
+    error: error instanceof Error ? error.message : String(error),
+  };
+}
+
 export function DesktopUVoiceCoordinator() {
   const params = useParams({ strict: false });
   const activeThread = useThreadShell(resolveThreadRouteRef(params));
@@ -25,7 +36,10 @@ export function DesktopUVoiceCoordinator() {
       try {
         if (request.action === "target") {
           if (!activeThread)
-            throw new Error("Select an existing T3 conversation before recording a response.");
+            return failedUVoiceResponse(
+              request,
+              "Select an existing T3 conversation before recording a response.",
+            );
           return {
             ok: true,
             requestId: request.requestId,
@@ -41,7 +55,8 @@ export function DesktopUVoiceCoordinator() {
               candidate.environmentId === request.environmentId,
         );
         if (matches.length !== 1)
-          throw new Error(
+          return failedUVoiceResponse(
+            request,
             matches.length > 1
               ? "More than one T3 conversation matches this message. Open the intended chat manually."
               : "The saved T3 conversation is unavailable. Reconnect its environment before continuing.",
@@ -62,7 +77,8 @@ export function DesktopUVoiceCoordinator() {
             ...(request.conversationId ? { conversationId: request.conversationId } : {}),
           };
         }
-        if (!request.text?.trim()) throw new Error("The UVoice response is empty.");
+        if (!request.text?.trim())
+          return failedUVoiceResponse(request, "The UVoice response is empty.");
         const result = await startTurn({
           environmentId: thread.environmentId,
           input: {
@@ -80,7 +96,8 @@ export function DesktopUVoiceCoordinator() {
             dispatchMode: "auto",
           },
         });
-        if (result._tag === "Failure") throw squashAtomCommandFailure(result);
+        if (result._tag === "Failure")
+          return failedUVoiceResponse(request, squashAtomCommandFailure(result));
         return {
           ok: true,
           requestId: request.requestId,
@@ -89,11 +106,7 @@ export function DesktopUVoiceCoordinator() {
           accepted: true,
         };
       } catch (error) {
-        return {
-          ok: false,
-          requestId: request.requestId,
-          error: error instanceof Error ? error.message : String(error),
-        };
+        return failedUVoiceResponse(request, error);
       }
     },
   );

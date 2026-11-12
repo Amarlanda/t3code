@@ -121,6 +121,8 @@ it("consumes Command menu input once without taking renderer shortcuts or Contro
         type: "keyDown",
         key: "w",
         code: "KeyW",
+        location: 0,
+        modifiers: ["meta"],
         meta: true,
         control: false,
         alt: false,
