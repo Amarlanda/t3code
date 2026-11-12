@@ -34,10 +34,10 @@ You can also focus the input by clicking it or using a workspace focus command.
 
 ## Browse threads
 
-Tab enters the sidebar once. Up and Down move between threads without opening them; Enter
+Tab moves through each thread and its buttons. Up and Down move between threads without opening them; Enter
 opens the focused thread or toggles a group. Left Arrow or `h` collapses a group or
 selects its parent; Right Arrow or `l` returns to the conversation in NORMAL mode.
-Tab moves from the focused thread to its buttons. `r` renames the focused thread.
+`r` renames the focused thread.
 
 Press `m` or the Context Menu key to open the focused thread's menu. Use the arrow
 keys to move through it, Enter to choose, and Escape to close it.
@@ -55,5 +55,5 @@ On desktop, hold Shift while right-clicking to reach **Inspect Element** in area
 their own menus. Streamed browser pages keep their page interactions; this shortcut does
 not inspect their remote page content.
 
-The Settings section list works the same way: Up and Down move between sections, and Enter
-opens one.
+The Settings section list works the same way: Tab moves through each section, Up and Down
+also move between sections without opening them, and Enter opens one.

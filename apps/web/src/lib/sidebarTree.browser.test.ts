@@ -4,19 +4,18 @@ import { page, userEvent } from "vite-plus/test/browser";
 import { render } from "../../test/render";
 import { Sidebar, SidebarProvider, useSidebar } from "../components/ui/sidebar";
 import { useStableCallback } from "../hooks/useStableCallback";
-import { attachSidebarTree, installSidebarTree } from "./sidebarTree";
+import { attachSidebarTree, focusSidebarRow, installSidebarTree } from "./sidebarTree";
 import { startWorkspaceFocus, workspaceAreaProps } from "./workspaceFocus";
 
 function setup() {
   const root = document.createElement("div");
-  root.setAttribute("role", "tree");
+  root.dataset.sidebarThreadList = "";
   document.body.append(root);
   let dispose: (() => void) | undefined;
   const row = (id: string, parent?: string) => {
     const element = document.createElement("button");
     element.dataset.sidebarRow = id;
     if (parent) element.dataset.sidebarParent = parent;
-    element.setAttribute("role", "treeitem");
     element.textContent = id;
     root.append(element);
     return element;
@@ -56,13 +55,12 @@ function SidebarNavigationFixture() {
       createElement(
         "div",
         {
-          role: "tree",
+          "data-sidebar-thread-list": "",
           ref: (node: HTMLDivElement | null) => attachSidebarTree(node, leaveSidebar),
         },
         createElement(
           "button",
           {
-            role: "treeitem",
             "data-sidebar-row": "project",
             "aria-expanded": expanded,
             onClick: () => setExpanded(!expanded),
@@ -85,7 +83,7 @@ function SidebarNavigationFixture() {
 }
 
 describe("sidebar keyboard navigation", () => {
-  it("moves focus without activating rows, clamps at the ends, and keeps one Tab stop", () => {
+  it("moves focus without activating rows, clamps at the ends, and keeps every row in the Tab order", () => {
     using tree = setup();
     const first = tree.row("first");
     const second = tree.row("second");
@@ -111,7 +109,11 @@ describe("sidebar keyboard navigation", () => {
     press(last, "Home");
     expect(document.activeElement).toBe(first);
     expect(activate).not.toHaveBeenCalled();
-    expect(tree.root.querySelectorAll('[tabindex="0"]')).toHaveLength(1);
+    expect([first.tabIndex, second.tabIndex, last.tabIndex]).toEqual([0, 0, 0]);
+    second.setAttribute("aria-current", "page");
+    first.blur();
+    expect(focusSidebarRow()).toBe(true);
+    expect(document.activeElement).toBe(second);
   });
 
   it.each(["{Enter}", " "])("toggles a group with %s and returns to its parent", async (key) => {
@@ -129,12 +131,6 @@ describe("sidebar keyboard navigation", () => {
     await userEvent.keyboard(key);
     expect(group.getAttribute("aria-expanded")).toBe("true");
     expect(document.activeElement).toBe(group);
-    // The tree picks up the new child from its mutation observer.
-    await vi.waitFor(() =>
-      expect(
-        tree.root.querySelector('[data-sidebar-parent="project"]')?.getAttribute("aria-level"),
-      ).toBe("2"),
-    );
     press(group, "ArrowDown");
     const child = document.activeElement as HTMLElement;
     expect(child.dataset.sidebarRow).toBe("thread");
@@ -171,7 +167,7 @@ describe("sidebar keyboard navigation", () => {
         await userEvent.click(screen.getByRole("button", { name: "Open sidebar" }));
         await expect.element(page.getByRole("dialog", { name: "Sidebar" })).toBeVisible();
       }
-      const group = page.getByRole("treeitem", { name: "Project" }).element() as HTMLElement;
+      const group = page.getByRole("button", { name: "Project" }).element() as HTMLElement;
       group.focus();
       for (const modifiers of [
         { ctrlKey: true },
@@ -190,7 +186,7 @@ describe("sidebar keyboard navigation", () => {
       await expect.element(prompt).toHaveValue("");
       if (width < 768)
         await expect.element(page.getByRole("dialog", { name: "Sidebar" })).not.toBeInTheDocument();
-      else await expect.element(page.getByRole("treeitem", { name: "Project" })).toBeVisible();
+      else await expect.element(page.getByRole("button", { name: "Project" })).toBeVisible();
     },
   );
 
@@ -226,7 +222,7 @@ describe("sidebar keyboard navigation", () => {
     expect(document.activeElement).toBe(selected);
   });
 
-  it("lets Tab reach only the focused row's buttons", () => {
+  it("leaves every row's buttons in the Tab order", () => {
     using tree = setup();
     const first = tree.row("first");
     const second = tree.row("second");
@@ -241,10 +237,10 @@ describe("sidebar keyboard navigation", () => {
     const secondAction = action("second");
     tree.install();
     first.focus();
-    expect([firstAction.tabIndex, secondAction.tabIndex]).toEqual([0, -1]);
+    expect([firstAction.tabIndex, secondAction.tabIndex]).toEqual([0, 0]);
     press(first, "ArrowDown");
     expect(document.activeElement).toBe(second);
-    expect([firstAction.tabIndex, secondAction.tabIndex]).toEqual([-1, 0]);
+    expect([firstAction.tabIndex, secondAction.tabIndex]).toEqual([0, 0]);
   });
 
   it("keeps a rendered row under a collapsed group reachable", () => {
@@ -274,26 +270,6 @@ describe("sidebar keyboard navigation", () => {
     expect(undo.tabIndex).toBe(0);
   });
 
-  it("gives row buttons back their own tab order when the tree reinstalls", () => {
-    using tree = setup();
-    tree.row("first");
-    const second = tree.row("second");
-    const action = (owner: string) => {
-      const button = document.createElement("button");
-      button.dataset.sidebarActionFor = owner;
-      tree.root.append(button);
-      return button;
-    };
-    const firstAction = action("first");
-    const secondAction = action("second");
-    const dispose = installSidebarTree(tree.root);
-    second.focus();
-    dispose();
-    expect([firstAction.tabIndex, secondAction.tabIndex]).toEqual([0, 0]);
-    tree.install();
-    expect([firstAction.tabIndex, secondAction.tabIndex]).toEqual([-1, 0]);
-  });
-
   it("keeps the scroll position when focus follows a row that moved away", async () => {
     using tree = setup();
     Object.assign(tree.root.style, { height: "100px", overflow: "auto" });
@@ -313,7 +289,7 @@ describe("sidebar keyboard navigation", () => {
     expect(tree.root.scrollTop).toBe(0);
   });
 
-  it("does not pull focus back after a click outside the tree", async () => {
+  it("does not pull focus back after a click outside the rows", async () => {
     using tree = setup();
     const first = tree.row("first");
     tree.install();
@@ -321,16 +297,18 @@ describe("sidebar keyboard navigation", () => {
     text.textContent = "Chat text";
     document.body.append(text);
     using _text = { [Symbol.dispose]: () => text.remove() };
-    first.focus();
-    await userEvent.click(text);
-    expect(document.activeElement).toBe(document.body);
-    // A status change re-renders the tree while the user works elsewhere.
-    tree.row("second");
-    await vi.waitFor(() =>
-      expect(
-        tree.root.querySelector('[data-sidebar-row="second"]')?.getAttribute("aria-posinset"),
-      ).toBe("2"),
-    );
-    expect(document.activeElement).toBe(document.body);
+    const spacer = document.createElement("div");
+    spacer.textContent = "Empty list space";
+    tree.root.append(spacer);
+    for (const target of [text, spacer]) {
+      first.focus();
+      await userEvent.click(target);
+      expect(document.activeElement).toBe(document.body);
+      // A status change re-renders the list while the user works elsewhere.
+      tree.row(`second-${target.tagName}`);
+      // The list's mutation observer callback is queued ahead of this continuation.
+      await Promise.resolve();
+      expect(document.activeElement).toBe(document.body);
+    }
   });
 });

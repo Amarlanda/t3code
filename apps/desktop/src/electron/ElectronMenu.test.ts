@@ -108,6 +108,32 @@ it("consumes Command menu input once without taking renderer shortcuts or Contro
       assert.equal(sendInputEvent.mock.calls.length, 0);
     }
   }
+
+  const closeTools = vi.fn();
+  getApplicationMenu.mockReset().mockReturnValue({
+    items: [{ accelerator: "Super+W", enabled: true, click: closeTools }],
+  });
+  const closeEvent = { preventDefault: vi.fn() };
+  assert.isFalse(
+    ElectronMenu.handleCommandMenuInput(
+      closeEvent,
+      {
+        type: "keyDown",
+        key: "w",
+        code: "KeyW",
+        meta: true,
+        control: false,
+        alt: false,
+        shift: false,
+        isAutoRepeat: false,
+        isComposing: false,
+      },
+      "linux",
+      contents,
+    ),
+  );
+  assert.equal(closeEvent.preventDefault.mock.calls.length, 0);
+  assert.equal(closeTools.mock.calls.length, 0);
 });
 
 it.effect("keeps app actions and inspects custom menu targets in window points", () =>

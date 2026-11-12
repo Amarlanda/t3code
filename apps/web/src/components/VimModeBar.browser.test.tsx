@@ -99,8 +99,8 @@ it.each([true, false])("leaves and re-enters the composer with rich text %s", as
   await using screen = await render(
     <SidebarProvider defaultOpen={false}>
       <Sidebar collapsible="offcanvas">
-        <div role="tree" aria-label="Threads">
-          <button role="treeitem" data-sidebar-row="thread" tabIndex={0}>
+        <div data-sidebar-thread-list>
+          <button data-sidebar-row="thread" tabIndex={0}>
             A thread
           </button>
         </div>
@@ -159,7 +159,7 @@ it.each([true, false])("leaves and re-enters the composer with rich text %s", as
   await expect.element(screen.getByText("-- INSERT --")).toBeVisible();
 
   await userEvent.keyboard("{Escape}{ArrowLeft}");
-  await expect.element(screen.getByRole("treeitem", { name: "A thread" })).toHaveFocus();
+  await expect.element(screen.getByRole("button", { name: "A thread" })).toHaveFocus();
   await expect.element(screen.getByText("-- SIDEBAR --")).toBeVisible();
   await userEvent.click(prompt);
   await expect.element(prompt).toHaveFocus();
@@ -195,8 +195,8 @@ it("updates hints for editable and terminal focus and remapped bindings", async 
   ]);
   const fixture = (bindings: ResolvedKeybindingsConfig) => (
     <SidebarProvider>
-      <div role="tree" aria-label="Threads">
-        <button role="treeitem">A thread</button>
+      <div data-sidebar-thread-list>
+        <button>A thread</button>
         <input aria-label="Thread title" />
       </div>
       <div data-terminal-owner="drawer">
@@ -219,7 +219,7 @@ it("updates hints for editable and terminal focus and remapped bindings", async 
   await expect.element(helper.getByText("-- TERMINAL --")).toBeVisible();
   await expect.element(helper.getByText("Commands", { exact: true })).not.toBeInTheDocument();
 
-  await userEvent.click(screen.getByRole("treeitem", { name: "A thread" }));
+  await userEvent.click(screen.getByRole("button", { name: "A thread" }));
   await expect.element(helper.getByText("-- SIDEBAR --")).toBeVisible();
   await expect.element(helper.getByText("Sidebar", { exact: true })).toBeVisible();
   await expect.element(helper.getByText("Commands", { exact: true })).toBeVisible();

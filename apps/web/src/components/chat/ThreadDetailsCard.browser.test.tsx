@@ -45,6 +45,8 @@ function Card({
   fixture,
   rows = 1,
   focusControls = false,
+  automationRows = 0,
+  serverOverflowRows = 0,
 }: {
   threadRef: ScopedThreadRef;
   inline: boolean;
@@ -52,6 +54,10 @@ function Card({
   /** Rows of 100px shown at full density. Compact always takes 50px. */
   rows?: number;
   focusControls?: boolean;
+  /** Rows of 100px in an automations list shown at full density. */
+  automationRows?: number;
+  /** Rows of 100px that expanded server lists add, which density ignores. */
+  serverOverflowRows?: number;
 }) {
   return (
     // The web root renders in StrictMode, which re-runs ref callbacks on every mount.
@@ -76,19 +82,30 @@ function Card({
           contentKey={String(rows)}
         >
           {(density) => (
-            <div style={{ height: density === "full" ? rows * 100 : 50 }}>
-              <span>Details for {threadRef.threadId}</span>
-              {focusControls ? (
-                <>
-                  <button>Environment</button>
-                  <button data-thread-launcher="cursor" disabled>
-                    Open Cursor
-                  </button>
-                  <button data-thread-launcher="vscode">Open VS Code</button>
-                  <button data-thread-launcher="gitgrove">Open GitGrove</button>
-                </>
+            <>
+              <div style={{ height: density === "full" ? rows * 100 : 50 }}>
+                <span>Details for {threadRef.threadId}</span>
+                {focusControls ? (
+                  <>
+                    <button>Environment</button>
+                    <button data-thread-launcher="cursor" disabled>
+                      Open Cursor
+                    </button>
+                    <button data-thread-launcher="vscode">Open VS Code</button>
+                    <button data-thread-launcher="gitgrove">Open GitGrove</button>
+                  </>
+                ) : null}
+              </div>
+              {density === "full" && automationRows > 0 ? (
+                <section data-thread-automations-panel style={{ height: automationRows * 100 }} />
               ) : null}
-            </div>
+              {density === "full" && serverOverflowRows > 0 ? (
+                <div
+                  data-thread-details-server-overflow
+                  style={{ height: serverOverflowRows * 100 }}
+                />
+              ) : null}
+            </>
           )}
         </ThreadDetailsCard>
       </ChatCanvasContext>
@@ -181,4 +198,25 @@ it("returns to full density when hidden items make the content fit", async () =>
 
   await screen.rerender(<Card threadRef={threadB} inline fixture={fixture} rows={2} />);
   await expect.element(card).toHaveAttribute("data-density", "full");
+});
+
+it("keeps full density when many automations make the content tall", async () => {
+  using fixture = setup();
+  await using _screen = await render(
+    <Card threadRef={threadB} inline fixture={fixture} rows={2} automationRows={6} />,
+  );
+  await expect.element(page.getByText("Details for thread-b")).toBeVisible();
+  await expect
+    .element(page.getByRole("region", { name: "Thread details" }))
+    .toHaveAttribute("data-density", "full");
+});
+
+it("stays full while expanded server rows overflow", async () => {
+  using fixture = setup();
+  await using _screen = await render(
+    <Card threadRef={threadB} inline fixture={fixture} rows={2} serverOverflowRows={4} />,
+  );
+  await expect
+    .element(page.getByRole("region", { name: "Thread details" }))
+    .toHaveAttribute("data-density", "full");
 });

@@ -38,6 +38,7 @@ import {
   MenuSubPopup,
   MenuTrigger,
 } from "../ui/menu";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
   AntigravityIcon,
   CursorIcon,
@@ -308,11 +309,18 @@ export const OpenInPicker = memo(function OpenInPicker({
     });
   };
 
+  const unavailableReason =
+    remote.mode === "remote-unavailable"
+      ? `No SSH route to ${environmentLabel}`
+      : remote.mode === "remote-links" && options.length === 0
+        ? `Open from a computer to edit on ${environmentLabel}`
+        : null;
+
   const editorItems = (
     <>
-      {remote.mode === "remote-unavailable" ? (
+      {unavailableReason !== null ? (
         <MenuItem density={presentation === "menu" ? "touch" : "default"} disabled>
-          No SSH route to {environmentLabel}
+          {unavailableReason}
         </MenuItem>
       ) : (
         <>
@@ -378,6 +386,51 @@ export const OpenInPicker = memo(function OpenInPicker({
     );
   }
 
+  const primaryControlLabel = compact ? "Open file in preferred editor" : primaryLabel;
+  const primaryControl = (
+    <ThreadDetailsControl
+      aria-label={primaryControlLabel}
+      // Tooltip replaces the button data-slot, so toolbar theming needs a separate hook.
+      data-toolbar-control=""
+      data-thread-launcher={isPanel ? (preferredEditor ?? undefined) : undefined}
+      size={isPanel ? "sm" : "xs"}
+      variant={isPanel ? "ghost" : "outline"}
+      part="primary"
+      panel={isPanel}
+      disabled={!preferredEditor || !openInCwd || !canOpenEditor}
+      {...(enableShortcut && !backgroundThread ? { [OPEN_FAVORITE_EDITOR_ATTRIBUTE]: "" } : {})}
+      onClick={() => {
+        if (!preferredEditor) return;
+        const label = editorLabelForPlatform(preferredEditor, navigator.platform);
+        void openInEditor(preferredEditor).then((opened) => {
+          if (opened) announce(`Opened in ${label}`);
+        });
+      }}
+    >
+      {primaryOption?.Icon ? (
+        <primaryOption.Icon
+          aria-hidden="true"
+          className={cn(
+            isPanel ? THREAD_DETAILS_PANEL_ICON_CLASS : "size-3.5",
+            getOpenInIconClass(primaryOption.kind),
+          )}
+        />
+      ) : isPanel ? (
+        <SquareArrowOutUpRightIcon aria-hidden="true" className={THREAD_DETAILS_PANEL_ICON_CLASS} />
+      ) : null}
+      <span
+        className={cn(
+          compact
+            ? "sr-only"
+            : "sr-only @3xl/header-actions:not-sr-only @3xl/header-actions:ml-0.5",
+          isPanel && cn("not-sr-only ml-0 min-w-0 truncate", THREAD_DETAILS_PANEL_LABEL_CLASS),
+        )}
+      >
+        {primaryLabel}
+      </span>
+    </ThreadDetailsControl>
+  );
+
   return (
     <ActionGroup
       aria-label="Open in editor"
@@ -437,48 +490,10 @@ export const OpenInPicker = memo(function OpenInPicker({
       ))}
       <PickerRow {...(isPanel ? { className: THREAD_DETAILS_PANEL_SPLIT_GROUP_CLASS } : {})}>
         {!preferredHasQuickButton && (
-          <ThreadDetailsControl
-            aria-label={compact ? "Open file in preferred editor" : primaryLabel}
-            size={isPanel ? "sm" : "xs"}
-            variant={isPanel ? "ghost" : "outline"}
-            part="primary"
-            panel={isPanel}
-            data-thread-launcher={isPanel ? (preferredEditor ?? undefined) : undefined}
-            title={isPanel ? primaryLabel : undefined}
-            disabled={!preferredEditor || !openInCwd || !canOpenEditor}
-            {...(enableShortcut && !backgroundThread
-              ? { [OPEN_FAVORITE_EDITOR_ATTRIBUTE]: "" }
-              : {})}
-            onClick={() => {
-              if (preferredEditor) openAndAnnounce(preferredEditor);
-            }}
-          >
-            {primaryOption?.Icon ? (
-              <primaryOption.Icon
-                aria-hidden="true"
-                className={cn(
-                  isPanel ? THREAD_DETAILS_PANEL_ICON_CLASS : "size-3.5",
-                  getOpenInIconClass(primaryOption.kind),
-                )}
-              />
-            ) : isPanel ? (
-              <SquareArrowOutUpRightIcon
-                aria-hidden="true"
-                className={THREAD_DETAILS_PANEL_ICON_CLASS}
-              />
-            ) : null}
-            <span
-              className={cn(
-                compact
-                  ? "sr-only"
-                  : "sr-only @3xl/header-actions:not-sr-only @3xl/header-actions:ml-0.5",
-                isPanel &&
-                  cn("not-sr-only ml-0 min-w-0 truncate", THREAD_DETAILS_PANEL_LABEL_CLASS),
-              )}
-            >
-              {primaryLabel}
-            </span>
-          </ThreadDetailsControl>
+          <Tooltip>
+            <TooltipTrigger render={primaryControl} />
+            <TooltipPopup side="top">{primaryControlLabel}</TooltipPopup>
+          </Tooltip>
         )}
         {isPanel ? (
           !preferredHasQuickButton && (
@@ -490,29 +505,36 @@ export const OpenInPicker = memo(function OpenInPicker({
           />
         )}
         <Menu open={menuOpen} onOpenChange={setMenuOpen}>
-          <MenuTrigger
-            disabled={isHostEditorDenied}
-            render={
-              <ThreadDetailsControl
-                aria-label="Choose editor"
-                size={isPanel ? "sm" : "icon-xs"}
-                variant={isPanel ? "ghost" : "outline"}
-                part={preferredHasQuickButton ? "row" : "secondary"}
-                panel={isPanel}
-                title="Choose editor"
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <MenuTrigger
+                  disabled={isHostEditorDenied}
+                  render={
+                    <ThreadDetailsControl
+                      aria-label="Choose editor"
+                      data-toolbar-control=""
+                      size={isPanel ? "sm" : "icon-xs"}
+                      variant={isPanel ? "ghost" : "outline"}
+                      part={preferredHasQuickButton ? "row" : "secondary"}
+                      panel={isPanel}
+                    />
+                  }
+                />
+              }
+            >
+              {preferredHasQuickButton && (
+                <span className={cn("min-w-0 flex-1 truncate", THREAD_DETAILS_PANEL_LABEL_CLASS)}>
+                  Other editors
+                </span>
+              )}
+              <ChevronDownIcon
+                aria-hidden="true"
+                className={isPanel ? THREAD_DETAILS_PANEL_CHEVRON_CLASS : "size-4"}
               />
-            }
-          >
-            {preferredHasQuickButton && (
-              <span className={cn("min-w-0 flex-1 truncate", THREAD_DETAILS_PANEL_LABEL_CLASS)}>
-                Other editors
-              </span>
-            )}
-            <ChevronDownIcon
-              aria-hidden="true"
-              className={isPanel ? THREAD_DETAILS_PANEL_CHEVRON_CLASS : "size-4"}
-            />
-          </MenuTrigger>
+            </TooltipTrigger>
+            <TooltipPopup side="top">Choose editor</TooltipPopup>
+          </Tooltip>
           <MenuPopup
             align="end"
             {...(isPanel ? { anchor: panelAnchorRef } : {})}

@@ -61,7 +61,7 @@ function readMode(active: Element | null): VimMode {
   if (active?.matches('input[aria-label="Search threads"]')) return "SEARCH";
   if (active?.closest("[data-composer-rich-text]")) return "INSERT";
   if (isEditableFocused(active)) return "INPUT";
-  if (active?.closest('[role="tree"][aria-label="Threads"]')) return "SIDEBAR";
+  if (active?.closest("[data-sidebar-thread-list]")) return "SIDEBAR";
   return "NORMAL";
 }
 

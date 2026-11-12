@@ -74,6 +74,8 @@ export function handleCommandMenuInput(
     input.isComposing
   )
     return false;
+  // The renderer and preview forwarding own tab close; the native item is only for DevTools.
+  if (input.key.toLowerCase() === "w" && !input.alt && !input.shift) return false;
   const matches = (item: Electron.MenuItem): boolean => {
     if (!item.enabled || !item.accelerator) return false;
     const parts = item.accelerator.toLowerCase().split("+");
@@ -142,7 +144,10 @@ function normalizeContextMenuItems(source: readonly ContextMenuItem[]): ContextM
 
     const normalizedItem: ContextMenuItem = {
       id: sourceItem.id,
-      label: sourceItem.label,
+      label:
+        typeof sourceItem.detail === "string" && sourceItem.detail.length > 0
+          ? `${sourceItem.label} (${sourceItem.detail})`
+          : sourceItem.label,
       destructive: sourceItem.destructive === true,
       disabled: sourceItem.disabled === true,
       ...(sourceItem.separatorBefore === true ? { separatorBefore: true } : {}),
